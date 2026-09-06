@@ -1,0 +1,49 @@
+name: Auto Build & Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Extract Version from Code
+        id: version_extractor
+        shell: pwsh
+        run: |
+          $file = "Launcher/WiiCompiled.Setup.Windows/Program.cs"
+          $match = Select-String -Path $file -Pattern 'public const string Version = "([^"]+)";'
+          $version = $match.Matches.Groups[1].Value
+          $tag = "v$version"
+          echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+          echo "TAG=$tag" >> $env:GITHUB_OUTPUT
+          Write-Host "Versione rilevata automaticamente dal codice: $version (Tag: $tag)"
+
+      - name: Build Windows Installer
+        shell: pwsh
+        run: |
+          ./Launcher/Build-Installer.ps1
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version_extractor.outputs.TAG }}
+          name: WiiCompiled ${{ steps.version_extractor.outputs.TAG }} (Keyboard Support)
+          files: Launcher/dist/WiiCompiled-Setup.exe
+          body: |
+            Automated build of WiiCompiled featuring native Keyboard & Mouse controls from PR #162.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
