@@ -11,8 +11,29 @@
 #include "runtime_config.h"
 #include "runtime_log.h"
 
-// The console identity the HLE exposes is that of a console from the executable's own region
-// (region/guest_region.h): AREA/GAME indices and the CODE prefix follow the game, not the host.
+namespace {
+
+// Use the SDK's own value tables, including its unknown-region result.
+uint32_t LookupProductRegion(uint32_t table, uint32_t stride, uint32_t count,
+                             const std::string& value) {
+    for (uint32_t index = 0; index < count; ++index) {
+        const uint32_t entry = table + index * stride;
+        if (!Memory::Contains(entry, stride)) {
+            break;
+        }
+        const auto* bytes = static_cast<const uint8_t*>(Memory::GetPointer(entry, stride));
+        if (bytes[0] == 0xFF) {
+            break;
+        }
+        if (value.size() < stride - 1 &&
+            std::memcmp(bytes + 1, value.c_str(), value.size() + 1) == 0) {
+            return bytes[0];
+        }
+    }
+    return 0xFFFFFFFFu;
+}
+
+} // namespace
 
 // SCCheckStatus is polled in OSInit's busy loop (while(SCCheckStatus()==1) waits on async SYSCONF
 // load via NAND IPC); we have no async IPC callbacks, so return 0 (SUCCESS) immediately.
@@ -48,30 +69,27 @@ extern "C" uint32_t SCGetEuRgb60Mode_HLE()
 
 PPC_NATIVE_OVERRIDE(801B1CAC, SCGetEuRgb60Mode_HLE, uint32_t, (), ());
 
-// The managed NAND intentionally starts without a console-owned setting.txt.
-// DWC nevertheless requires the Wii product code and serial number so it can
-// include csnum in NAS authentication. Expose one stable virtual-console
-// identity without requiring or mutating a user's real NAND.
+// Expose the selected emulated NAND identity through the SDK SC APIs.
 
 extern "C" uint32_t SCGetProductArea_HLE()
 {
-    // setting.txt AREA ("EUR" for PAL, "USA" for NTSC-U). The SDK's lookup table at
-    // PAL 0x8029CEB0 maps JPN=0, USA=1, EUR=2.
-    return MKW_REGION_SC_AREA;
+    return LookupProductRegion(0x8029CEB0u, 5, 13,
+                               RuntimeConsoleIdentity::Current().area);
 }
 
 PPC_NATIVE_OVERRIDE(801B23A0, SCGetProductArea_HLE, uint32_t, (), ());
 
 extern "C" uint32_t SCGetProductCode_HLE()
 {
-    // Original SC storage for the six-byte CODE value (PAL identity 0x803869E0).
-    constexpr uint32_t kProductCodeAddress = MKW_GADDR(803869E0);
-    static constexpr char kProductCode[] = MKW_REGION_SC_PRODUCT_CODE;
-    if (!Memory::Contains(kProductCodeAddress, sizeof(kProductCode))) {
+    // Original PAL SC storage for the six-byte CODE value.
+    constexpr uint32_t kProductCodeAddress = 0x803869E0u;
+    const std::string& productCode = RuntimeConsoleIdentity::Current().productCode;
+    const size_t size = productCode.size() + 1;
+    if (!Memory::Contains(kProductCodeAddress, size)) {
         return 0;
     }
-    std::memcpy(Memory::GetPointer(kProductCodeAddress, sizeof(kProductCode)),
-                kProductCode, sizeof(kProductCode));
+    std::memcpy(Memory::GetPointer(kProductCodeAddress, size),
+                productCode.c_str(), size);
     return kProductCodeAddress;
 }
 
@@ -89,9 +107,8 @@ PPC_NATIVE_OVERRIDE(801B2460, SCGetProductSN_HLE, uint32_t, (uint32_t serialAddr
 
 extern "C" uint32_t SCGetProductGameRegion_HLE()
 {
-    // setting.txt GAME ("EU" for PAL, "US" for NTSC-U). The SDK's own lookup table at
-    // PAL 0x8029CEF8 maps JP=0, US=1, EU=2.
-    return MKW_REGION_SC_GAME_REGION;
+    return LookupProductRegion(0x8029CEF8u, 4, 4,
+                               RuntimeConsoleIdentity::Current().gameRegion);
 }
 
 PPC_NATIVE_OVERRIDE(801B24C8, SCGetProductGameRegion_HLE, uint32_t, (), ());
