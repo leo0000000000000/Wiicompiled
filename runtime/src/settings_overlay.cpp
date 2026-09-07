@@ -518,13 +518,19 @@ void DrawRebindPrompt() {
         ImGui::TextUnformatted(g_rebind.kind == RebindKind::Controller
             ? "Press a controller button, pull a trigger, or move a stick."
             : "Press a keyboard key or click a mouse button.");
-        ImGui::TextUnformatted("Release any held input first. Escape cancels. F10 is reserved for settings.");
+        ImGui::TextUnformatted("Release any held input first. Backspace or Delete clears the mapping.");
+        ImGui::TextUnformatted("Escape can be bound. F10 is reserved for settings.");
         const float remaining = std::chrono::duration<float>(g_rebind.deadline - Clock::now()).count();
         ImGui::Text("Unmapped in %d seconds", std::max(0, static_cast<int>(std::ceil(remaining))));
-        if (remaining <= 0.0f) {
+        const bool clear = ImGui::Button("Clear mapping");
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel")) g_rebind.active = false;
+        // UI clicks must not become mouse bindings (buttons activate on release).
+        const bool overControl = ImGui::IsAnyItemHovered();
+        if (g_rebind.active && (clear || remaining <= 0.0f)) {
             CompleteRebind(g_rebind.kind == RebindKind::Controller ? PAD_NATIVE_BUTTON_DISABLED
                                                                   : static_cast<uint32_t>(PAD_KEY_INVALID));
-        } else if (SDL_GetKeyboardFocus() != nullptr && g_rebind.kind != RebindKind::Controller) {
+        } else if (g_rebind.active && SDL_GetKeyboardFocus() != nullptr && g_rebind.kind != RebindKind::Controller) {
             int count = 0;
             const bool* keys = SDL_GetKeyboardState(&count);
             for (int i = 1; i < std::min(count, static_cast<int>(SDL_SCANCODE_COUNT)) && g_rebind.active; ++i) {
@@ -533,9 +539,9 @@ void DrawRebindPrompt() {
             }
             const uint32_t mouse = SDL_GetMouseState(nullptr, nullptr);
             for (int i = 1; i <= 5 && g_rebind.active; ++i)
-                if ((mouse & ~g_rebind.mouse & (1u << (i - 1))) != 0) CompleteRebind(static_cast<uint32_t>(-i - 1));
+                if (!overControl && (mouse & ~g_rebind.mouse & (1u << (i - 1))) != 0) CompleteRebind(static_cast<uint32_t>(-i - 1));
             g_rebind.mouse = mouse;
-        } else if (SDL_GetKeyboardFocus() != nullptr && g_rebind.kind == RebindKind::Controller) {
+        } else if (g_rebind.active && SDL_GetKeyboardFocus() != nullptr && g_rebind.kind == RebindKind::Controller) {
             auto* pad = SDL_GetGamepadFromID(g_rebind.instance);
             if (pad != nullptr) {
                 for (int i = 0; i < SDL_GAMEPAD_BUTTON_COUNT && g_rebind.active; ++i) {
@@ -1170,9 +1176,26 @@ void DrawStartupScreen() {
 }
 
 void DrawTopBar() {
-    if (!g_topBarVisible || !ImGui::BeginMainMenuBar()) {
+    if (!g_topBarVisible) {
         return;
     }
+
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::GetBackgroundDrawList()->AddRectFilled(viewport->Pos,
+        ImVec2(viewport->Pos.x + viewport->Size.x, viewport->Pos.y + viewport->Size.y),
+        IM_COL32(0, 0, 0, 70));
+    ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x + viewport->Size.x * 0.5f,
+                                 viewport->Pos.y + viewport->Size.y - 24.0f),
+                            ImGuiCond_Always, ImVec2(0.5f, 1.0f));
+    ImGui::SetNextWindowBgAlpha(0.85f);
+    if (ImGui::Begin("Settings input hint", nullptr,
+                     ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
+                     ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoSavedSettings |
+                     ImGuiWindowFlags_NoFocusOnAppearing)) {
+        ImGui::TextUnformatted("Settings open - game controls disabled. Press F10 to return to the game.");
+    }
+    ImGui::End();
+    if (!ImGui::BeginMainMenuBar()) return;
 
     ImGui::TextUnformatted("WiiCompiled");
     ImGui::Separator();
@@ -1311,8 +1334,10 @@ void HandleEvents(const AuroraEvent* events) noexcept {
             continue;
         }
         controller_mapping_wizard::HandleSdlEvent(ev->sdl);
-        if (g_rebind.active && IsToggleKey(ev->sdl, SDL_SCANCODE_ESCAPE)) {
-            g_rebind.active = false;
+        if (g_rebind.active && (IsToggleKey(ev->sdl, SDL_SCANCODE_BACKSPACE) ||
+                                IsToggleKey(ev->sdl, SDL_SCANCODE_DELETE))) {
+            CompleteRebind(g_rebind.kind == RebindKind::Controller ? PAD_NATIVE_BUTTON_DISABLED
+                                                                  : static_cast<uint32_t>(PAD_KEY_INVALID));
         }
         if (!g_rebind.active && IsToggleKey(ev->sdl, SDL_SCANCODE_F10)) {
             SetTopBarVisible(!g_topBarVisible);
