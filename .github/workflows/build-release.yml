@@ -1,10 +1,10 @@
-name: Build & Release (Custom Version)
+name: "Build and Release"
 
 on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Numero di versione da assegnare (es. 0.2.28.1)'
+        description: 'Numero di versione (es. 0.2.28.1)'
         required: true
         default: '0.2.28.1'
         type: string
@@ -35,41 +35,29 @@ jobs:
           $tag = "v$v"
           Write-Host "Compilazione con versione: $v (Tag: $tag)"
 
-          # 1. Aggiorna Program.cs
           $progFile = "Launcher/WiiCompiled.Setup.Windows/Program.cs"
           (Get-Content $progFile) -replace 'public const string Version = "[^"]+";', "public const string Version = `"$v`";" | Set-Content $progFile
 
-
-	  # Aggiorna automaticamente la scritta della versione nel menu F10
-	  $overlayFile = "runtime/src/settings_overlay.cpp"
-	  (Get-Content $overlayFile) -replace 'WiiCompiled v[0-9\.]+', "WiiCompiled v$v" | Set-Content $overlayFile
-
-
-          # 2. Aggiorna il file di progetto C#
           $projFile = "Launcher/WiiCompiled.Setup.Windows/WiiCompiled.Setup.Windows.csproj"
           (Get-Content $projFile) -replace '<Version>[^<]+</Version>', "<Version>$v</Version>" | Set-Content $projFile
 
-
-
-          # 3. Aggiorna lo script dell'installer
           $buildScript = "Launcher/Build-Installer.ps1"
           (Get-Content $buildScript) -replace "ProductVersion = '[^']+'", "ProductVersion = '$v'" | Set-Content $buildScript
+
+          $overlayFile = "runtime/src/settings_overlay.cpp"
+          if (Test-Path $overlayFile) {
+              (Get-Content $overlayFile) -replace 'WiiCompiled v[0-9a-zA-Z\.\-]+', "WiiCompiled v$v" | Set-Content $overlayFile
+          }
 
           echo "VERSION=$v" >> $env:GITHUB_OUTPUT
           echo "TAG=$tag" >> $env:GITHUB_OUTPUT
 
-      - name: Generate Patch Notes from Git Commits
+      - name: Generate Patch Notes
         id: patch_notes
         shell: pwsh
         run: |
           $commits = git log -n 5 --pretty=format:"* %s (%h)"
-          $notes = @"
-          ### What's New in this Build:
-          $commits
-
-          ---
-          *Custom build of WiiCompiled featuring native Keyboard & Mouse controls (PR #162) and Region Support.*
-          "@
+          $notes = "### What's New in this Build:`n$commits`n`n---`n*Custom build of WiiCompiled featuring native Keyboard & Mouse controls.*"
           $notes | Out-File -FilePath patchnotes.md -Encoding utf8
 
       - name: Build Windows Installer
