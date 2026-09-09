@@ -226,18 +226,20 @@ std::string NativeBindingConfig(uint32_t binding) {
 // Variabile per mostrare/nascondere il diagramma (aperto di default)
 static bool g_showKeyboardGuide = true;
 
+// Mostra/nasconde la guida visiva (aperta di default)
+static bool g_showKeyboardGuide = true;
+
 void DrawKeyboardVisualGuide() {
     if (!g_showKeyboardGuide) return;
 
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
-    // Centra perfettamente la finestra rispetto alla schermata di gioco
     ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x + viewport->Size.x * 0.5f,
                                  viewport->Pos.y + viewport->Size.y * 0.5f),
                             ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
 
     ImGuiWindowFlags flags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize;
 
-    // Palette colori per i tasti
+    // Palette colori
     const ImVec4 colGreen  = ImVec4(0.18f, 0.65f, 0.30f, 0.90f); // W (Accelera)
     const ImVec4 colRed    = ImVec4(0.75f, 0.22f, 0.22f, 0.90f); // S (Frena)
     const ImVec4 colBlue   = ImVec4(0.20f, 0.48f, 0.80f, 0.90f); // A/D (Sterzo)
@@ -246,57 +248,93 @@ void DrawKeyboardVisualGuide() {
     const ImVec4 colCyan   = ImVec4(0.15f, 0.60f, 0.65f, 0.85f); // Frecce (Trick / Dietro)
     const ImVec4 colGray   = ImVec4(0.35f, 0.35f, 0.35f, 0.85f); // Q (Pausa)
 
-    // Helper per disegnare un tasto con etichetta centrata
-    auto DrawKeyBox = [](const char* key, const char* label, ImVec4 bg, ImVec2 size) {
+    // Recupera le assegnazioni correnti della tastiera per leggerle in tempo reale
+    uint32_t btnCount = 0;
+    auto* buttons = PADGetKeyButtonBindings(static_cast<uint32_t>(g_controllerPort), &btnCount);
+    uint32_t axisCount = 0;
+    auto* axes = PADGetKeyAxisBindings(static_cast<uint32_t>(g_controllerPort), &axisCount);
+
+    auto GetButtonKey = [&](uint16_t padBtn) -> const char* {
+        if (buttons) {
+            for (uint32_t i = 0; i < btnCount; ++i) {
+                if (buttons[i].padButton == padBtn) return KeyBindingName(buttons[i].scancode);
+            }
+        }
+        return "None";
+    };
+
+    auto GetAxisKey = [&](uint16_t padAxis) -> const char* {
+        if (axes) {
+            for (uint32_t i = 0; i < axisCount; ++i) {
+                if (axes[i].padAxis == padAxis) return KeyBindingName(axes[i].scancode);
+            }
+        }
+        return "None";
+    };
+
+    // Helper per disegnare un tasto CLICCABILE
+    auto DrawKeyBox = [&](const char* currentKey, const char* label, RebindKind kind, uint16_t target, ImVec4 bg, ImVec2 size) {
         ImGui::PushStyleColor(ImGuiCol_Button, bg);
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(bg.x * 1.15f, bg.y * 1.15f, bg.z * 1.15f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, bg);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(std::min(1.0f, bg.x * 1.25f), std::min(1.0f, bg.y * 1.25f), std::min(1.0f, bg.z * 1.25f), 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(bg.x * 0.8f, bg.y * 0.8f, bg.z * 0.8f, 1.0f));
         ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.0f);
 
-        std::string text = std::string(key) + "\n" + label;
-        ImGui::Button(text.c_str(), size);
+        std::string btnText = std::string(currentKey) + "\n" + label + "##btn_" + std::to_string(target);
+        if (ImGui::Button(btnText.c_str(), size)) {
+            // Se la tastiera non è ancora attiva, attivala al primo clic
+            uint32_t count = 0;
+            if (PADGetKeyButtonBindings(static_cast<uint32_t>(g_controllerPort), &count) == nullptr) {
+                PADSetKeyboardActive(static_cast<uint32_t>(g_controllerPort), true);
+                PADSerializeMappings();
+            }
+            BeginRebind(kind, target, label);
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Clicca per riassegnare il comando: %s", label);
+        }
 
         ImGui::PopStyleVar();
         ImGui::PopStyleColor(3);
     };
 
     if (ImGui::Begin("Guida Comandi Tastiera", &g_showKeyboardGuide, flags)) {
+        ImGui::TextDisabled("Clicca su un tasto qualsiasi per riconfigurarlo!");
         ImGui::Spacing();
 
-        // RIGA 1: [ Q: Pausa ]              [ W: Accelera ]                     [ ↑: Trick/Su ]
-        DrawKeyBox("Q", "Pausa", colGray, ImVec2(60, 48));
+        // RIGA 1: [ Q: Pausa ]              [ W: Accelera ]                     [ ^: Trick/Su ]
+        DrawKeyBox(GetButtonKey(PAD_BUTTON_START), "Pausa", RebindKind::KeyboardButton, PAD_BUTTON_START, colGray, ImVec2(70, 48));
         ImGui::SameLine(0, 45);
-        DrawKeyBox("W", "Accelera", colGreen, ImVec2(75, 48));
-        ImGui::SameLine(0, 115);
-        DrawKeyBox("^", "Trick / Su", colCyan, ImVec2(75, 48));
+        DrawKeyBox(GetButtonKey(PAD_BUTTON_A), "Accelera", RebindKind::KeyboardButton, PAD_BUTTON_A, colGreen, ImVec2(80, 48));
+        ImGui::SameLine(0, 110);
+        DrawKeyBox(GetButtonKey(PAD_BUTTON_UP), "Trick / Su", RebindKind::KeyboardButton, PAD_BUTTON_UP, colCyan, ImVec2(85, 48));
 
         ImGui::Spacing();
 
         // RIGA 2: [ A: Sinistra ] [ S: Frena ] [ D: Destra ]     [ <-: Trick ] [ v: Dietro ] [ ->: Trick ]
-        DrawKeyBox("A", "Sinistra", colBlue, ImVec2(70, 48));
+        DrawKeyBox(GetAxisKey(PAD_AXIS_LEFT_X_NEG), "Sinistra", RebindKind::KeyboardAxis, PAD_AXIS_LEFT_X_NEG, colBlue, ImVec2(75, 48));
         ImGui::SameLine();
-        DrawKeyBox("S", "Frena/Retr.", colRed, ImVec2(80, 48));
+        DrawKeyBox(GetButtonKey(PAD_BUTTON_B), "Frena/Retr.", RebindKind::KeyboardButton, PAD_BUTTON_B, colRed, ImVec2(85, 48));
         ImGui::SameLine();
-        DrawKeyBox("D", "Destra", colBlue, ImVec2(70, 48));
-        ImGui::SameLine(0, 25);
-        DrawKeyBox("<", "Trick", colCyan, ImVec2(55, 48));
+        DrawKeyBox(GetAxisKey(PAD_AXIS_LEFT_X_POS), "Destra", RebindKind::KeyboardAxis, PAD_AXIS_LEFT_X_POS, colBlue, ImVec2(75, 48));
+        ImGui::SameLine(0, 20);
+        DrawKeyBox(GetButtonKey(PAD_BUTTON_LEFT), "Trick", RebindKind::KeyboardButton, PAD_BUTTON_LEFT, colCyan, ImVec2(60, 48));
         ImGui::SameLine();
-        DrawKeyBox("v", "Dietro", colCyan, ImVec2(55, 48));
+        DrawKeyBox(GetButtonKey(PAD_BUTTON_X), "Dietro", RebindKind::KeyboardButton, PAD_BUTTON_X, colCyan, ImVec2(60, 48));
         ImGui::SameLine();
-        DrawKeyBox(">", "Trick", colCyan, ImVec2(55, 48));
+        DrawKeyBox(GetButtonKey(PAD_BUTTON_RIGHT), "Trick", RebindKind::KeyboardButton, PAD_BUTTON_RIGHT, colCyan, ImVec2(60, 48));
 
         ImGui::Spacing();
         ImGui::Spacing();
 
         // RIGA 3: [       SPAZIO : Derapata / Salto       ]          [ INVIO : Usa Oggetto ]
-        DrawKeyBox("SPAZIO", "Derapata / Salto", colPurple, ImVec2(230, 44));
+        DrawKeyBox(GetButtonKey(PAD_TRIGGER_R), "Derapata / Salto", RebindKind::KeyboardButton, PAD_TRIGGER_R, colPurple, ImVec2(245, 44));
         ImGui::SameLine(0, 30);
-        DrawKeyBox("INVIO", "Usa Oggetto", colOrange, ImVec2(130, 44));
+        DrawKeyBox(GetButtonKey(PAD_TRIGGER_L), "Usa Oggetto", RebindKind::KeyboardButton, PAD_TRIGGER_L, colOrange, ImVec2(140, 44));
 
         ImGui::Spacing();
         ImGui::Separator();
         ImGui::Spacing();
-        ImGui::TextDisabled("Ricorda di premere F10 per chiudere il menu e iniziare a guidare!");
+        ImGui::TextDisabled("Premi F10 per chiudere il menu e iniziare a guidare!");
     }
     ImGui::End();
 }
@@ -1268,7 +1306,7 @@ void DrawTopBar() {
         ImVec2(viewport->Pos.x + viewport->Size.x, viewport->Pos.y + viewport->Size.y),
         IM_COL32(0, 0, 0, 70));
 
-    // 2. Avviso in basso per i controlli
+    // 2. Avviso in basso
     ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x + viewport->Size.x * 0.5f,
                                  viewport->Pos.y + viewport->Size.y - 24.0f),
                             ImGuiCond_Always, ImVec2(0.5f, 1.0f));
@@ -1281,10 +1319,11 @@ void DrawTopBar() {
     }
     ImGui::End();
 
-    // 3. DISEGNA LA GUIDA DELLA TASTIERA AL CENTRO DELLO SCHERMO (Qui, fuori dal Menu Bar!)
+    // 3. Disegna la guida interattiva e la finestra modale di riassegnazione
     DrawKeyboardVisualGuide();
+    DrawRebindPrompt();
 
-    // 4. ORA APRI LA BARRA IN ALTO (BeginMainMenuBar)
+    // 4. Apri la barra dei menu
     if (!ImGui::BeginMainMenuBar()) return;
 
     ImGui::TextUnformatted("WiiCompiled");
