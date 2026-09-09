@@ -30,6 +30,8 @@
 #include <string_view>
 #include <utility>
 
+#include <fstream>
+
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
@@ -70,6 +72,39 @@ const char* GraphicsApiDisplayName() {
 }
 
 bool g_topBarVisible = false;
+
+// --- Gestione e salvataggio della scala UI ---
+static void SaveUiScale(float scale) {
+    try {
+        std::ofstream file("ui_scale.cfg");
+        if (file.is_open()) {
+            file << scale;
+        }
+    } catch (...) {}
+}
+
+static float LoadSavedUiScale() {
+    try {
+        std::ifstream file("ui_scale.cfg");
+        float val = 1.0f;
+        if (file.is_open() && (file >> val)) {
+            return std::clamp(val, 0.70f, 2.50f);
+        }
+    } catch (...) {}
+    return 1.0f;
+}
+
+static float g_userUiScale = LoadSavedUiScale();
+static bool g_showKeyboardGuide = true;
+
+float GetUiScale() {
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    if (!viewport || viewport->Size.y <= 0.0f) return 1.0f;
+    float autoBase = std::clamp(viewport->Size.y / 1080.0f, 0.75f, 2.4f);
+    return std::clamp(autoBase * g_userUiScale, 0.65f, 3.0f);
+}
+// ----------------------------------------------
+
 bool g_rumbleEnabled = RuntimeConfigFile::RumbleEnabled(true);
 int g_controllerPort = 0;
 float g_resolutionScale = RuntimeConfigFile::ResolutionMultiplier(1.0f);
@@ -1184,49 +1219,6 @@ void DrawStartupScreen() {
     ImGui::PopStyleVar();
     ImGui::PopStyleColor();
 }
-
-// Show/hide keyboard visual guide (open by default)
-static bool g_showKeyboardGuide = true;
-
-#include <fstream>
-
-// Carica la scala salvata (default 1.0x se non esiste)
-float LoadSavedUiScale() {
-    try {
-        const auto path = fs_path_from_string(aurora::g_config.userPath) / "ui_scale.cfg";
-        std::ifstream file(fs_path_to_string(path));
-        float val = 1.0f;
-        if (file.is_open() && (file >> val)) {
-            return std::clamp(val, 0.70f, 2.50f);
-        }
-    } catch (...) {}
-    return 1.0f;
-}
-
-// Salva la scala su disco
-void SaveUiScale(float scale) {
-    try {
-        const auto path = fs_path_from_string(aurora::g_config.userPath) / "ui_scale.cfg";
-        std::ofstream file(fs_path_to_string(path));
-        if (file.is_open()) {
-            file << scale;
-        }
-    } catch (...) {}
-}
-
-// Moltiplicatore manuale scelto dall'utente
-static float g_userUiScale = LoadSavedUiScale();
-
-// Calcola la scala finale combinando risoluzione schermo e preferenza utente
-float GetUiScale() {
-    const ImGuiViewport* viewport = ImGui::GetMainViewport();
-    if (!viewport || viewport->Size.y <= 0.0f) return 1.0f;
-    float autoBase = std::clamp(viewport->Size.y / 1080.0f, 0.75f, 2.4f);
-    return std::clamp(autoBase * g_userUiScale, 0.65f, 3.0f);
-}
-
-// Mostra/nasconde la guida visiva (aperta di default)
-static bool g_showKeyboardGuide = true;
 
 void DrawKeyboardVisualGuide() {
     if (!g_showKeyboardGuide) return;
