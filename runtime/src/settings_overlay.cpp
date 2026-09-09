@@ -223,6 +223,81 @@ std::string NativeBindingConfig(uint32_t binding) {
     return value;
 }
 
+// Variabile per mostrare/nascondere il diagramma (aperto di default)
+static bool g_showKeyboardGuide = true;
+
+void DrawKeyboardVisualGuide() {
+    if (!g_showKeyboardGuide) return;
+
+    ImGuiIO& io = ImGui::GetIO();
+    // Posiziona la finestra esattamente al centro dello schermo
+    ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize;
+
+    // Palette colori per i tasti
+    const ImVec4 colGreen  = ImVec4(0.18f, 0.65f, 0.30f, 0.90f); // W (Accelera)
+    const ImVec4 colRed    = ImVec4(0.75f, 0.22f, 0.22f, 0.90f); // S (Frena)
+    const ImVec4 colBlue   = ImVec4(0.20f, 0.48f, 0.80f, 0.90f); // A/D (Sterzo)
+    const ImVec4 colPurple = ImVec4(0.55f, 0.28f, 0.78f, 0.90f); // Spazio (Derapata)
+    const ImVec4 colOrange = ImVec4(0.85f, 0.52f, 0.12f, 0.90f); // Invio (Oggetto)
+    const ImVec4 colCyan   = ImVec4(0.15f, 0.60f, 0.65f, 0.85f); // Frecce (Trick / Dietro)
+    const ImVec4 colGray   = ImVec4(0.35f, 0.35f, 0.35f, 0.85f); // Q (Pausa)
+
+    // Helper per disegnare un tasto con etichetta centrata
+    auto DrawKeyBox = [](const char* key, const char* label, ImVec4 bg, ImVec2 size) {
+        ImGui::PushStyleColor(ImGuiCol_Button, bg);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(bg.x * 1.15f, bg.y * 1.15f, bg.z * 1.15f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, bg);
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.0f);
+
+        std::string text = std::string(key) + "\n" + label;
+        ImGui::Button(text.c_str(), size);
+
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor(3);
+    };
+
+    if (ImGui::Begin("Guida Comandi Tastiera", &g_showKeyboardGuide, flags)) {
+        ImGui::Spacing();
+
+        // RIGA 1: [ Q: Pausa ]              [ W: Accelera ]                     [ ↑: Trick/Su ]
+        DrawKeyBox("Q", "Pausa", colGray, ImVec2(60, 48));
+        ImGui::SameLine(0, 45);
+        DrawKeyBox("W", "Accelera", colGreen, ImVec2(75, 48));
+        ImGui::SameLine(0, 115);
+        DrawKeyBox("^", "Trick / Su", colCyan, ImVec2(75, 48));
+
+        ImGui::Spacing();
+
+        // RIGA 2: [ A: Sinistra ] [ S: Frena ] [ D: Destra ]     [ <-: Trick ] [ v: Dietro ] [ ->: Trick ]
+        DrawKeyBox("A", "Sinistra", colBlue, ImVec2(70, 48));
+        ImGui::SameLine();
+        DrawKeyBox("S", "Frena/Retr.", colRed, ImVec2(80, 48));
+        ImGui::SameLine();
+        DrawKeyBox("D", "Destra", colBlue, ImVec2(70, 48));
+        ImGui::SameLine(0, 25);
+        DrawKeyBox("<", "Trick", colCyan, ImVec2(55, 48));
+        ImGui::SameLine();
+        DrawKeyBox("v", "Dietro", colCyan, ImVec2(55, 48));
+        ImGui::SameLine();
+        DrawKeyBox(">", "Trick", colCyan, ImVec2(55, 48));
+
+        ImGui::Spacing();
+        ImGui::Spacing();
+
+        // RIGA 3: [       SPAZIO : Derapata / Salto       ]          [ INVIO : Usa Oggetto ]
+        DrawKeyBox("SPAZIO", "Derapata / Salto", colPurple, ImVec2(230, 44));
+        ImGui::SameLine(0, 30);
+        DrawKeyBox("INVIO", "Usa Oggetto", colOrange, ImVec2(130, 44));
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+        ImGui::TextDisabled("Ricorda di premere F10 per chiudere il menu e iniziare a guidare!");
+    }
+    ImGui::End();
+}
 
 void SetTopBarVisible(bool visible) {
     if (g_topBarVisible == visible) {
@@ -1206,6 +1281,8 @@ void DrawTopBar() {
 
     ImGui::TextDisabled("WiiCompiled v0.2.32 (Keyboard & Mouse Edition)"); //Current version statement
     ImGui::Separator();
+
+    DrawKeyboardVisualGuide();
 
     const auto resolutionIt = std::find_if(kResolutions.begin(), kResolutions.end(), [](const ResolutionItem& item) {
         return std::fabs(item.scale - g_resolutionScale) < 0.001f;
