@@ -1077,7 +1077,14 @@ void DrawGraphicsSettings() {
     if (ImGui::Checkbox("Show FPS", &g_showFps)) {
         RuntimeConfigFile::SetShowFps(g_showFps);
     }
+
     ImGui::Separator();
+    
+    ImGui::SetNextItemWidth(200.0f);
+    if (ImGui::SliderFloat("UI Scale", &g_userUiScale, 0.75f, 2.00f, "%.2fx")) {
+        SaveUiScale(g_userUiScale);
+    }
+    
     ImGui::Text("Graphics API: %s", GraphicsApiDisplayName());
 }
 
@@ -1181,17 +1188,60 @@ void DrawStartupScreen() {
 // Show/hide keyboard visual guide (open by default)
 static bool g_showKeyboardGuide = true;
 
+#include <fstream>
+
+// Carica la scala salvata (default 1.0x se non esiste)
+float LoadSavedUiScale() {
+    try {
+        const auto path = fs_path_from_string(aurora::g_config.userPath) / "ui_scale.cfg";
+        std::ifstream file(fs_path_to_string(path));
+        float val = 1.0f;
+        if (file.is_open() && (file >> val)) {
+            return std::clamp(val, 0.70f, 2.50f);
+        }
+    } catch (...) {}
+    return 1.0f;
+}
+
+// Salva la scala su disco
+void SaveUiScale(float scale) {
+    try {
+        const auto path = fs_path_from_string(aurora::g_config.userPath) / "ui_scale.cfg";
+        std::ofstream file(fs_path_to_string(path));
+        if (file.is_open()) {
+            file << scale;
+        }
+    } catch (...) {}
+}
+
+// Moltiplicatore manuale scelto dall'utente
+static float g_userUiScale = LoadSavedUiScale();
+
+// Calcola la scala finale combinando risoluzione schermo e preferenza utente
+float GetUiScale() {
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    if (!viewport || viewport->Size.y <= 0.0f) return 1.0f;
+    float autoBase = std::clamp(viewport->Size.y / 1080.0f, 0.75f, 2.4f);
+    return std::clamp(autoBase * g_userUiScale, 0.65f, 3.0f);
+}
+
+// Mostra/nasconde la guida visiva (aperta di default)
+static bool g_showKeyboardGuide = true;
+
 void DrawKeyboardVisualGuide() {
     if (!g_showKeyboardGuide) return;
 
+    const float scale = GetUiScale();
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
+
+    // Centra sempre la finestra al centro esatto della visuale
     ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x + viewport->Size.x * 0.5f,
                                  viewport->Pos.y + viewport->Size.y * 0.5f),
-                            ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+                            ImGuiCond_Always, ImVec2(0.5f, 0.5f));
 
     ImGuiWindowFlags flags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize;
 
-    // Distinct theme colors
+    // Palette colori
     const ImVec4 colGreen  = ImVec4(0.18f, 0.65f, 0.30f, 0.95f); // Accelerate
     const ImVec4 colRed    = ImVec4(0.78f, 0.22f, 0.22f, 0.95f); // Brake / Reverse
     const ImVec4 colBlue   = ImVec4(0.20f, 0.48f, 0.82f, 0.95f); // Steering
@@ -1227,7 +1277,7 @@ void DrawKeyboardVisualGuide() {
         ImGui::PushStyleColor(ImGuiCol_Button, bg);
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(std::min(1.0f, bg.x * 1.25f), std::min(1.0f, bg.y * 1.25f), std::min(1.0f, bg.z * 1.25f), 1.0f));
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(bg.x * 0.8f, bg.y * 0.8f, bg.z * 0.8f, 1.0f));
-        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.0f * scale);
 
         std::string btnText = std::string(currentKey) + "\n" + label + "##btn_" + std::to_string(target);
         if (ImGui::Button(btnText.c_str(), size)) {
@@ -1247,6 +1297,9 @@ void DrawKeyboardVisualGuide() {
     };
 
     if (ImGui::Begin("Keyboard Controls Setup", &g_showKeyboardGuide, flags)) {
+        // Scala la dimensione del testo della finestra
+        ImGui::SetWindowFontScale(scale);
+
         ImGui::TextDisabled("Click on any key to rebind its control in real-time.");
         ImGui::Spacing();
 
@@ -1257,15 +1310,13 @@ void DrawKeyboardVisualGuide() {
         ImGui::SeparatorText("DRIVING");
         ImGui::Spacing();
 
-        const float driveKeyW = 82.0f;
-        const float driveKeyH = 50.0f;
+        const float driveKeyW = 82.0f * scale;
+        const float driveKeyH = 50.0f * scale;
         const float indentW   = driveKeyW + ImGui::GetStyle().ItemSpacing.x;
 
-        // W (Accelerate) centered above S
         ImGui::SetCursorPosX(ImGui::GetCursorPosX() + indentW);
         DrawKeyBox(GetButtonKey(PAD_BUTTON_A), "Accelerate", RebindKind::KeyboardButton, PAD_BUTTON_A, colGreen, ImVec2(driveKeyW, driveKeyH));
 
-        // A / S / D row
         DrawKeyBox(GetAxisKey(PAD_AXIS_LEFT_X_NEG), "Steer Left", RebindKind::KeyboardAxis, PAD_AXIS_LEFT_X_NEG, colBlue, ImVec2(driveKeyW, driveKeyH));
         ImGui::SameLine();
         DrawKeyBox(GetButtonKey(PAD_BUTTON_B), "Brake / Rev", RebindKind::KeyboardButton, PAD_BUTTON_B, colRed, ImVec2(driveKeyW, driveKeyH));
@@ -1274,22 +1325,21 @@ void DrawKeyboardVisualGuide() {
 
         ImGui::Spacing();
 
-        // SPACE BAR: Drift / Hop across the full width
         const float spaceW = (driveKeyW * 3.0f) + (ImGui::GetStyle().ItemSpacing.x * 2.0f);
-        DrawKeyBox(GetButtonKey(PAD_TRIGGER_R), "Drift / Hop", RebindKind::KeyboardButton, PAD_TRIGGER_R, colPurple, ImVec2(spaceW, 46.0f));
+        DrawKeyBox(GetButtonKey(PAD_TRIGGER_R), "Drift / Hop", RebindKind::KeyboardButton, PAD_TRIGGER_R, colPurple, ImVec2(spaceW, 46.0f * scale));
 
         ImGui::EndGroup();
 
         // -------------------------------------------------------------
         // GROUP 2: ACTIONS & PAUSE
         // -------------------------------------------------------------
-        ImGui::SameLine(0, 35.0f);
+        ImGui::SameLine(0, 35.0f * scale);
         ImGui::BeginGroup();
         ImGui::SeparatorText("ACTIONS & PAUSE");
         ImGui::Spacing();
 
-        const float actW = 125.0f;
-        const float actH = 46.0f;
+        const float actW = 125.0f * scale;
+        const float actH = 46.0f * scale;
 
         DrawKeyBox(GetButtonKey(PAD_TRIGGER_L), "Use Item", RebindKind::KeyboardButton, PAD_TRIGGER_L, colOrange, ImVec2(actW, actH));
         ImGui::Spacing();
@@ -1302,20 +1352,18 @@ void DrawKeyboardVisualGuide() {
         // -------------------------------------------------------------
         // GROUP 3: TRICKS & D-PAD
         // -------------------------------------------------------------
-        ImGui::SameLine(0, 35.0f);
+        ImGui::SameLine(0, 35.0f * scale);
         ImGui::BeginGroup();
         ImGui::SeparatorText("TRICKS / D-PAD");
         ImGui::Spacing();
 
-        const float dpadW = 68.0f;
-        const float dpadH = 50.0f;
+        const float dpadW = 68.0f * scale;
+        const float dpadH = 50.0f * scale;
         const float indentDpad = dpadW + ImGui::GetStyle().ItemSpacing.x;
 
-        // D-Pad Up
         ImGui::SetCursorPosX(ImGui::GetCursorPosX() + indentDpad);
         DrawKeyBox(GetButtonKey(PAD_BUTTON_UP), "Wheelie / Up", RebindKind::KeyboardButton, PAD_BUTTON_UP, colCyan, ImVec2(dpadW, dpadH));
 
-        // D-Pad Left / Down / Right
         DrawKeyBox(GetButtonKey(PAD_BUTTON_LEFT), "Trick L", RebindKind::KeyboardButton, PAD_BUTTON_LEFT, colCyan, ImVec2(dpadW, dpadH));
         ImGui::SameLine();
         DrawKeyBox(GetButtonKey(PAD_BUTTON_DOWN), "Trick Down", RebindKind::KeyboardButton, PAD_BUTTON_DOWN, colCyan, ImVec2(dpadW, dpadH));
@@ -1330,6 +1378,19 @@ void DrawKeyboardVisualGuide() {
         ImGui::Spacing();
         ImGui::Separator();
         ImGui::Spacing();
+
+        // Slider scala UI con salvataggio immediato
+        ImGui::SetNextItemWidth(180.0f * scale);
+        if (ImGui::SliderFloat("UI Scale", &g_userUiScale, 0.75f, 2.00f, "%.2fx")) {
+            SaveUiScale(g_userUiScale);
+        }
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Reset")) {
+            g_userUiScale = 1.0f;
+            SaveUiScale(g_userUiScale);
+        }
+        ImGui::Spacing();
+        
         ImGui::TextDisabled("Controls are paused while F10 is open. Press F10 to return to the game.");
     }
     ImGui::End();
@@ -1340,6 +1401,7 @@ void DrawTopBar() {
         return;
     }
 
+    const float scale = GetUiScale();
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
 
     // 1. Sfondo scuro (Dimming)
@@ -1347,25 +1409,33 @@ void DrawTopBar() {
         ImVec2(viewport->Pos.x + viewport->Size.x, viewport->Pos.y + viewport->Size.y),
         IM_COL32(0, 0, 0, 70));
 
-    // 2. Avviso in basso
+    // 2. Avviso in basso (scalato)
     ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x + viewport->Size.x * 0.5f,
-                                 viewport->Pos.y + viewport->Size.y - 24.0f),
+                                 viewport->Pos.y + viewport->Size.y - (26.0f * scale)),
                             ImGuiCond_Always, ImVec2(0.5f, 1.0f));
     ImGui::SetNextWindowBgAlpha(0.85f);
     if (ImGui::Begin("Settings input hint", nullptr,
                      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
                      ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoSavedSettings |
                      ImGuiWindowFlags_NoFocusOnAppearing)) {
+        ImGui::SetWindowFontScale(scale);
         ImGui::TextUnformatted("Settings open - game controls disabled. Press F10 to return to the game.");
     }
     ImGui::End();
 
-    // 3. Disegna la guida interattiva e la finestra modale di riassegnazione
+    // 3. Disegna la guida tastiera e il modal di rebind
     DrawKeyboardVisualGuide();
     DrawRebindPrompt();
 
-    // 4. Apri la barra dei menu
-    if (!ImGui::BeginMainMenuBar()) return;
+    // 4. Barra dei menu principale (scala l'altezza e il padding)
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f * scale, 6.0f * scale));
+    const bool barOpen = ImGui::BeginMainMenuBar();
+    ImGui::PopStyleVar();
+
+    if (!barOpen) return;
+
+    // Scala il testo e i menu della barra superiore
+    ImGui::SetWindowFontScale(scale);
 
     ImGui::TextUnformatted("WiiCompiled");
     ImGui::Separator();
@@ -1373,7 +1443,7 @@ void DrawTopBar() {
     ImGui::TextDisabled("WiiCompiled v0.2.32 (Keyboard & Mouse Edition)");
     ImGui::Separator();
 
-    // Pulsante per riaprire la guida dal menu
+    // Pulsante per la guida tasti
     if (ImGui::MenuItem("Controls Guide", nullptr, g_showKeyboardGuide)) {
         g_showKeyboardGuide = !g_showKeyboardGuide;
     }
@@ -1405,7 +1475,6 @@ void DrawTopBar() {
 
     if (ImGui::BeginMenu("Controller settings")) {
         DrawControllerSettings();
-        DrawRebindPrompt();
         ImGui::EndMenu();
     }
 
@@ -1419,7 +1488,7 @@ void DrawTopBar() {
     }
 
     const float hideWidth = ImGui::CalcTextSize("Hide (F10)").x + ImGui::GetStyle().FramePadding.x * 2.0f;
-    ImGui::SetCursorPosX(std::max(ImGui::GetCursorPosX(), ImGui::GetWindowWidth() - hideWidth - 8.0f));
+    ImGui::SetCursorPosX(std::max(ImGui::GetCursorPosX(), ImGui::GetWindowWidth() - hideWidth - (8.0f * scale)));
     if (ImGui::MenuItem("Hide (F10)")) {
         SetTopBarVisible(false);
     }
