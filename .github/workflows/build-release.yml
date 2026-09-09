@@ -39,9 +39,17 @@ jobs:
           $progFile = "Launcher/WiiCompiled.Setup.Windows/Program.cs"
           (Get-Content $progFile) -replace 'public const string Version = "[^"]+";', "public const string Version = `"$v`";" | Set-Content $progFile
 
+
+	  # Aggiorna automaticamente la scritta della versione nel menu F10
+	  $overlayFile = "runtime/src/settings_overlay.cpp"
+	  (Get-Content $overlayFile) -replace 'WiiCompiled v[0-9\.]+', "WiiCompiled v$v" | Set-Content $overlayFile
+
+
           # 2. Aggiorna il file di progetto C#
           $projFile = "Launcher/WiiCompiled.Setup.Windows/WiiCompiled.Setup.Windows.csproj"
           (Get-Content $projFile) -replace '<Version>[^<]+</Version>', "<Version>$v</Version>" | Set-Content $projFile
+
+
 
           # 3. Aggiorna lo script dell'installer
           $buildScript = "Launcher/Build-Installer.ps1"
