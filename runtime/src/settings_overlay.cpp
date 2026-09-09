@@ -1346,39 +1346,6 @@ void DrawTopBar() {
     ImGui::EndMainMenuBar();
 }
 
-    if (ImGui::BeginMenu("Graphics")) {
-        DrawGraphicsSettings();
-        ImGui::EndMenu();
-    }
-
-    if (ImGui::BeginMenu("Controller settings")) {
-        DrawControllerSettings();
-        // Nest capture under this menu so opening/closing the modal preserves
-        // the settings popup and its current port and scroll position.
-        DrawRebindPrompt();
-        ImGui::EndMenu();
-    }
-
-    const std::string audioLabel = g_audioMuted
-        ? "Audio: Muted"
-        : "Audio: " + std::to_string(g_audioVolumePercent) + "%";
-    // Keep the popup ID stable while the Master slider changes the visible
-    // label. Without the ### suffix, ImGui treats every new percentage as a
-    // different menu and closes the popup on the first drag update.
-    const std::string audioMenuLabel = audioLabel + "###AudioSettingsMenu";
-    if (ImGui::BeginMenu(audioMenuLabel.c_str())) {
-        DrawAudioSettings();
-        ImGui::EndMenu();
-    }
-
-    const float hideWidth = ImGui::CalcTextSize("Hide (F10)").x + ImGui::GetStyle().FramePadding.x * 2.0f;
-    ImGui::SetCursorPosX(std::max(ImGui::GetCursorPosX(), ImGui::GetWindowWidth() - hideWidth - 8.0f));
-    if (ImGui::MenuItem("Hide (F10)")) {
-        SetTopBarVisible(false);
-    }
-    ImGui::EndMainMenuBar();
-}
-
 bool IsToggleKey(const SDL_Event& event, SDL_Scancode code) {
     return event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat && event.key.scancode == code;
 }
