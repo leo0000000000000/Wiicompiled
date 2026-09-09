@@ -229,9 +229,11 @@ static bool g_showKeyboardGuide = true;
 void DrawKeyboardVisualGuide() {
     if (!g_showKeyboardGuide) return;
 
-    ImGuiIO& io = ImGui::GetIO();
-    // Posiziona la finestra esattamente al centro dello schermo
-    ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    // Centra perfettamente la finestra rispetto alla schermata di gioco
+    ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x + viewport->Size.x * 0.5f,
+                                 viewport->Pos.y + viewport->Size.y * 0.5f),
+                            ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
 
     ImGuiWindowFlags flags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize;
 
@@ -1260,9 +1262,13 @@ void DrawTopBar() {
     }
 
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
+
+    // 1. Sfondo scuro (Dimming)
     ImGui::GetBackgroundDrawList()->AddRectFilled(viewport->Pos,
         ImVec2(viewport->Pos.x + viewport->Size.x, viewport->Pos.y + viewport->Size.y),
         IM_COL32(0, 0, 0, 70));
+
+    // 2. Avviso in basso per i controlli
     ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x + viewport->Size.x * 0.5f,
                                  viewport->Pos.y + viewport->Size.y - 24.0f),
                             ImGuiCond_Always, ImVec2(0.5f, 1.0f));
@@ -1274,15 +1280,24 @@ void DrawTopBar() {
         ImGui::TextUnformatted("Settings open - game controls disabled. Press F10 to return to the game.");
     }
     ImGui::End();
+
+    // 3. DISEGNA LA GUIDA DELLA TASTIERA AL CENTRO DELLO SCHERMO (Qui, fuori dal Menu Bar!)
+    DrawKeyboardVisualGuide();
+
+    // 4. ORA APRI LA BARRA IN ALTO (BeginMainMenuBar)
     if (!ImGui::BeginMainMenuBar()) return;
 
     ImGui::TextUnformatted("WiiCompiled");
     ImGui::Separator();
 
-    ImGui::TextDisabled("WiiCompiled v0.2.32 (Keyboard & Mouse Edition)"); //Current version statement
+    ImGui::TextDisabled("WiiCompiled v0.2.32 (Keyboard & Mouse Edition)");
     ImGui::Separator();
 
-    DrawKeyboardVisualGuide();
+    // Pulsante per riaprire la guida se l'utente la chiude con la "X"
+    if (ImGui::MenuItem("Guida Tasti", nullptr, g_showKeyboardGuide)) {
+        g_showKeyboardGuide = !g_showKeyboardGuide;
+    }
+    ImGui::Separator();
 
     const auto resolutionIt = std::find_if(kResolutions.begin(), kResolutions.end(), [](const ResolutionItem& item) {
         return std::fabs(item.scale - g_resolutionScale) < 0.001f;
@@ -1302,6 +1317,34 @@ void DrawTopBar() {
         }
         ImGui::EndMenu();
     }
+
+    if (ImGui::BeginMenu("Graphics")) {
+        DrawGraphicsSettings();
+        ImGui::EndMenu();
+    }
+
+    if (ImGui::BeginMenu("Controller settings")) {
+        DrawControllerSettings();
+        DrawRebindPrompt();
+        ImGui::EndMenu();
+    }
+
+    const std::string audioLabel = g_audioMuted
+        ? "Audio: Muted"
+        : "Audio: " + std::to_string(g_audioVolumePercent) + "%";
+    const std::string audioMenuLabel = audioLabel + "###AudioSettingsMenu";
+    if (ImGui::BeginMenu(audioMenuLabel.c_str())) {
+        DrawAudioSettings();
+        ImGui::EndMenu();
+    }
+
+    const float hideWidth = ImGui::CalcTextSize("Hide (F10)").x + ImGui::GetStyle().FramePadding.x * 2.0f;
+    ImGui::SetCursorPosX(std::max(ImGui::GetCursorPosX(), ImGui::GetWindowWidth() - hideWidth - 8.0f));
+    if (ImGui::MenuItem("Hide (F10)")) {
+        SetTopBarVisible(false);
+    }
+    ImGui::EndMainMenuBar();
+}
 
     if (ImGui::BeginMenu("Graphics")) {
         DrawGraphicsSettings();
