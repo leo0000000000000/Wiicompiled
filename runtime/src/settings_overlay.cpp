@@ -1178,7 +1178,7 @@ void DrawStartupScreen() {
     ImGui::PopStyleColor();
 }
 
-// Mostra/nasconde la guida visiva (aperta di default)
+// Show/hide keyboard visual guide (open by default)
 static bool g_showKeyboardGuide = true;
 
 void DrawKeyboardVisualGuide() {
@@ -1191,14 +1191,14 @@ void DrawKeyboardVisualGuide() {
 
     ImGuiWindowFlags flags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize;
 
-    // Palette colori
-    const ImVec4 colGreen  = ImVec4(0.18f, 0.65f, 0.30f, 0.90f); // W (Accelera)
-    const ImVec4 colRed    = ImVec4(0.75f, 0.22f, 0.22f, 0.90f); // S (Frena)
-    const ImVec4 colBlue   = ImVec4(0.20f, 0.48f, 0.80f, 0.90f); // A/D (Sterzo)
-    const ImVec4 colPurple = ImVec4(0.55f, 0.28f, 0.78f, 0.90f); // Spazio (Derapata)
-    const ImVec4 colOrange = ImVec4(0.85f, 0.52f, 0.12f, 0.90f); // Invio (Oggetto)
-    const ImVec4 colCyan   = ImVec4(0.15f, 0.60f, 0.65f, 0.85f); // Frecce (Trick / Dietro)
-    const ImVec4 colGray   = ImVec4(0.35f, 0.35f, 0.35f, 0.85f); // Q (Pausa)
+    // Distinct theme colors
+    const ImVec4 colGreen  = ImVec4(0.18f, 0.65f, 0.30f, 0.95f); // Accelerate
+    const ImVec4 colRed    = ImVec4(0.78f, 0.22f, 0.22f, 0.95f); // Brake / Reverse
+    const ImVec4 colBlue   = ImVec4(0.20f, 0.48f, 0.82f, 0.95f); // Steering
+    const ImVec4 colPurple = ImVec4(0.55f, 0.28f, 0.80f, 0.95f); // Drift
+    const ImVec4 colOrange = ImVec4(0.88f, 0.52f, 0.12f, 0.95f); // Item
+    const ImVec4 colCyan   = ImVec4(0.15f, 0.60f, 0.68f, 0.90f); // D-Pad / Look Behind
+    const ImVec4 colGray   = ImVec4(0.38f, 0.40f, 0.44f, 0.90f); // Pause
 
     uint32_t btnCount = 0;
     auto* buttons = PADGetKeyButtonBindings(static_cast<uint32_t>(g_controllerPort), &btnCount);
@@ -1211,7 +1211,7 @@ void DrawKeyboardVisualGuide() {
                 if (buttons[i].padButton == padBtn) return KeyBindingName(buttons[i].scancode);
             }
         }
-        return "None";
+        return "Unmapped";
     };
 
     auto GetAxisKey = [&](uint16_t padAxis) -> const char* {
@@ -1220,7 +1220,7 @@ void DrawKeyboardVisualGuide() {
                 if (axes[i].padAxis == padAxis) return KeyBindingName(axes[i].scancode);
             }
         }
-        return "None";
+        return "Unmapped";
     };
 
     auto DrawKeyBox = [&](const char* currentKey, const char* label, RebindKind kind, uint16_t target, ImVec4 bg, ImVec2 size) {
@@ -1239,51 +1239,98 @@ void DrawKeyboardVisualGuide() {
             BeginRebind(kind, target, label);
         }
         if (ImGui::IsItemHovered()) {
-            ImGui::SetTooltip("Clicca per riassegnare il comando: %s", label);
+            ImGui::SetTooltip("Click to rebind: %s", label);
         }
 
         ImGui::PopStyleVar();
         ImGui::PopStyleColor(3);
     };
 
-    if (ImGui::Begin("Guida Comandi Tastiera", &g_showKeyboardGuide, flags)) {
-        ImGui::TextDisabled("Clicca su un tasto qualsiasi per riconfigurarlo!");
+    if (ImGui::Begin("Keyboard Controls Setup", &g_showKeyboardGuide, flags)) {
+        ImGui::TextDisabled("Click on any key to rebind its control in real-time.");
         ImGui::Spacing();
 
-        // RIGA 1
-        DrawKeyBox(GetButtonKey(PAD_BUTTON_START), "Pausa", RebindKind::KeyboardButton, PAD_BUTTON_START, colGray, ImVec2(70, 48));
-        ImGui::SameLine(0, 45);
-        DrawKeyBox(GetButtonKey(PAD_BUTTON_A), "Accelera", RebindKind::KeyboardButton, PAD_BUTTON_A, colGreen, ImVec2(80, 48));
-        ImGui::SameLine(0, 110);
-        DrawKeyBox(GetButtonKey(PAD_BUTTON_UP), "Trick / Su", RebindKind::KeyboardButton, PAD_BUTTON_UP, colCyan, ImVec2(85, 48));
+        // -------------------------------------------------------------
+        // GROUP 1: DRIVING (WASD + Space)
+        // -------------------------------------------------------------
+        ImGui::BeginGroup();
+        ImGui::SeparatorText("DRIVING");
+        ImGui::Spacing();
+
+        const float driveKeyW = 82.0f;
+        const float driveKeyH = 50.0f;
+        const float indentW   = driveKeyW + ImGui::GetStyle().ItemSpacing.x;
+
+        // W (Accelerate) centered above S
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + indentW);
+        DrawKeyBox(GetButtonKey(PAD_BUTTON_A), "Accelerate", RebindKind::KeyboardButton, PAD_BUTTON_A, colGreen, ImVec2(driveKeyW, driveKeyH));
+
+        // A / S / D row
+        DrawKeyBox(GetAxisKey(PAD_AXIS_LEFT_X_NEG), "Steer Left", RebindKind::KeyboardAxis, PAD_AXIS_LEFT_X_NEG, colBlue, ImVec2(driveKeyW, driveKeyH));
+        ImGui::SameLine();
+        DrawKeyBox(GetButtonKey(PAD_BUTTON_B), "Brake / Rev", RebindKind::KeyboardButton, PAD_BUTTON_B, colRed, ImVec2(driveKeyW, driveKeyH));
+        ImGui::SameLine();
+        DrawKeyBox(GetAxisKey(PAD_AXIS_LEFT_X_POS), "Steer Right", RebindKind::KeyboardAxis, PAD_AXIS_LEFT_X_POS, colBlue, ImVec2(driveKeyW, driveKeyH));
 
         ImGui::Spacing();
 
-        // RIGA 2
-        DrawKeyBox(GetAxisKey(PAD_AXIS_LEFT_X_NEG), "Sinistra", RebindKind::KeyboardAxis, PAD_AXIS_LEFT_X_NEG, colBlue, ImVec2(75, 48));
-        ImGui::SameLine();
-        DrawKeyBox(GetButtonKey(PAD_BUTTON_B), "Frena/Retr.", RebindKind::KeyboardButton, PAD_BUTTON_B, colRed, ImVec2(85, 48));
-        ImGui::SameLine();
-        DrawKeyBox(GetAxisKey(PAD_AXIS_LEFT_X_POS), "Destra", RebindKind::KeyboardAxis, PAD_AXIS_LEFT_X_POS, colBlue, ImVec2(75, 48));
-        ImGui::SameLine(0, 20);
-        DrawKeyBox(GetButtonKey(PAD_BUTTON_LEFT), "Trick", RebindKind::KeyboardButton, PAD_BUTTON_LEFT, colCyan, ImVec2(60, 48));
-        ImGui::SameLine();
-        DrawKeyBox(GetButtonKey(PAD_BUTTON_X), "Dietro", RebindKind::KeyboardButton, PAD_BUTTON_X, colCyan, ImVec2(60, 48));
-        ImGui::SameLine();
-        DrawKeyBox(GetButtonKey(PAD_BUTTON_RIGHT), "Trick", RebindKind::KeyboardButton, PAD_BUTTON_RIGHT, colCyan, ImVec2(60, 48));
+        // SPACE BAR: Drift / Hop across the full width
+        const float spaceW = (driveKeyW * 3.0f) + (ImGui::GetStyle().ItemSpacing.x * 2.0f);
+        DrawKeyBox(GetButtonKey(PAD_TRIGGER_R), "Drift / Hop", RebindKind::KeyboardButton, PAD_TRIGGER_R, colPurple, ImVec2(spaceW, 46.0f));
 
-        ImGui::Spacing();
+        ImGui::EndGroup();
+
+        // -------------------------------------------------------------
+        // GROUP 2: ACTIONS & PAUSE
+        // -------------------------------------------------------------
+        ImGui::SameLine(0, 35.0f);
+        ImGui::BeginGroup();
+        ImGui::SeparatorText("ACTIONS & PAUSE");
         ImGui::Spacing();
 
-        // RIGA 3
-        DrawKeyBox(GetButtonKey(PAD_TRIGGER_R), "Derapata / Salto", RebindKind::KeyboardButton, PAD_TRIGGER_R, colPurple, ImVec2(245, 44));
-        ImGui::SameLine(0, 30);
-        DrawKeyBox(GetButtonKey(PAD_TRIGGER_L), "Usa Oggetto", RebindKind::KeyboardButton, PAD_TRIGGER_L, colOrange, ImVec2(140, 44));
+        const float actW = 125.0f;
+        const float actH = 46.0f;
 
+        DrawKeyBox(GetButtonKey(PAD_TRIGGER_L), "Use Item", RebindKind::KeyboardButton, PAD_TRIGGER_L, colOrange, ImVec2(actW, actH));
+        ImGui::Spacing();
+        DrawKeyBox(GetButtonKey(PAD_BUTTON_X), "Look Behind", RebindKind::KeyboardButton, PAD_BUTTON_X, colCyan, ImVec2(actW, actH));
+        ImGui::Spacing();
+        DrawKeyBox(GetButtonKey(PAD_BUTTON_START), "Pause", RebindKind::KeyboardButton, PAD_BUTTON_START, colGray, ImVec2(actW, actH));
+
+        ImGui::EndGroup();
+
+        // -------------------------------------------------------------
+        // GROUP 3: TRICKS & D-PAD
+        // -------------------------------------------------------------
+        ImGui::SameLine(0, 35.0f);
+        ImGui::BeginGroup();
+        ImGui::SeparatorText("TRICKS / D-PAD");
+        ImGui::Spacing();
+
+        const float dpadW = 68.0f;
+        const float dpadH = 50.0f;
+        const float indentDpad = dpadW + ImGui::GetStyle().ItemSpacing.x;
+
+        // D-Pad Up
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + indentDpad);
+        DrawKeyBox(GetButtonKey(PAD_BUTTON_UP), "Wheelie / Up", RebindKind::KeyboardButton, PAD_BUTTON_UP, colCyan, ImVec2(dpadW, dpadH));
+
+        // D-Pad Left / Down / Right
+        DrawKeyBox(GetButtonKey(PAD_BUTTON_LEFT), "Trick L", RebindKind::KeyboardButton, PAD_BUTTON_LEFT, colCyan, ImVec2(dpadW, dpadH));
+        ImGui::SameLine();
+        DrawKeyBox(GetButtonKey(PAD_BUTTON_DOWN), "Trick Down", RebindKind::KeyboardButton, PAD_BUTTON_DOWN, colCyan, ImVec2(dpadW, dpadH));
+        ImGui::SameLine();
+        DrawKeyBox(GetButtonKey(PAD_BUTTON_RIGHT), "Trick R", RebindKind::KeyboardButton, PAD_BUTTON_RIGHT, colCyan, ImVec2(dpadW, dpadH));
+
+        ImGui::EndGroup();
+
+        // -------------------------------------------------------------
+        // FOOTER
+        // -------------------------------------------------------------
         ImGui::Spacing();
         ImGui::Separator();
         ImGui::Spacing();
-        ImGui::TextDisabled("Premi F10 per chiudere il menu e iniziare a guidare!");
+        ImGui::TextDisabled("Controls are paused while F10 is open. Press F10 to return to the game.");
     }
     ImGui::End();
 }
@@ -1326,8 +1373,8 @@ void DrawTopBar() {
     ImGui::TextDisabled("WiiCompiled v0.2.32 (Keyboard & Mouse Edition)");
     ImGui::Separator();
 
-    // Pulsante per riaprire la guida se l'utente la chiude con la "X"
-    if (ImGui::MenuItem("Guida Tasti", nullptr, g_showKeyboardGuide)) {
+    // Pulsante per riaprire la guida dal menu
+    if (ImGui::MenuItem("Controls Guide", nullptr, g_showKeyboardGuide)) {
         g_showKeyboardGuide = !g_showKeyboardGuide;
     }
     ImGui::Separator();
