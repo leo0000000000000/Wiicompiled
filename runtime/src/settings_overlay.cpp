@@ -1463,9 +1463,6 @@ void DrawTopBar() {
     ImGui::TextUnformatted("WiiCompiled");
     ImGui::Separator();
 
-    ImGui::TextDisabled("WiiCompiled v0.2.32 (Keyboard & Mouse Edition)");
-    ImGui::Separator();
-
     // Pulsante per la guida tasti
     if (ImGui::MenuItem("Controls Guide", nullptr, g_showKeyboardGuide)) {
         g_showKeyboardGuide = !g_showKeyboardGuide;
