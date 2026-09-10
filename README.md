@@ -1,3 +1,4 @@
+<img width="4190" height="1232" alt="wiicomplogofinalfinalfinalev2MADEBY_INKWRECK_plzcredit" src="https://github.com/user-attachments/assets/df7a3f2e-5336-479a-b4c0-968dd578726d" />
 
 # WiiCompiled
 
@@ -164,7 +165,9 @@ The default test suite needs no binaries and no host C++ compiler, so you can ha
 translator without any game data around.
 
 For everything beyond that, feeding in your own `main.dol`/`StaticR.rel`, running the
-translation, generating the manifest and build graph, and compiling. see [`translator/README.md`](translator/README.md).
+translation, generating the manifest and build graph, and compiling, see [`translator/README.md`](translator/README.md).
+
+For a step-by-step guide on compiling both WiiCompiled and Retro Rewind from source on macOS (Apple Silicon), see the [macOS Build Guide](docs/building-macos.md).
 
 ## FAQ
 
@@ -213,7 +216,7 @@ AI coding tools were used during development of this project.
 All translated output is verified against real hardware behavior and most importantly, physics accuracy is proven synced across Wii, Dolphin, and WiiCompiled (see FAQ). 
 
 ## Credits
-
+- **inkwreck** - making the logo
 - **[aurora](https://github.com/encounter/aurora)** - the GX rendering/windowing backend this
   project's whole graphics layer sits on. MIT licensed.
 - **[Dawn](https://dawn.googlesource.com/dawn)** - Google's WebGPU implementation, powering
