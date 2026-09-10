@@ -1371,18 +1371,49 @@ void DrawKeyboardVisualGuide() {
         ImGui::Separator();
         ImGui::Spacing();
 
-        // Slider scala UI con salvataggio immediato
-        ImGui::SetNextItemWidth(180.0f * scale);
-        if (ImGui::SliderFloat("UI Scale", &g_userUiScale, 0.75f, 2.00f, "%.2fx")) {
+        // Variabile temporanea per evitare che la finestra si muova mentre trascini il mouse
+        static float s_stagedScale = g_userUiScale;
+
+        ImGui::SetNextItemWidth(160.0f * scale);
+        // Lo slider modifica solo il valore temporaneo
+        ImGui::SliderFloat("UI Scale", &s_stagedScale, 0.75f, 2.00f, "%.2fx");
+
+        // APPLICA LA SCALA SOLO QUANDO RILASCI IL TASTO DEL MOUSE!
+        if (ImGui::IsItemDeactivatedAfterEdit()) {
+            g_userUiScale = s_stagedScale;
             SaveUiScale(g_userUiScale);
         }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Drag to select scale, release mouse click to apply.");
+        }
+
+        // Tasti rapidi a clic singolo (non si buggano mai!)
         ImGui::SameLine();
         if (ImGui::SmallButton("Reset")) {
             g_userUiScale = 1.0f;
-            SaveUiScale(g_userUiScale);
+            s_stagedScale = 1.0f;
+            SaveUiScale(1.0f);
         }
+        ImGui::SameLine();
+        if (ImGui::SmallButton("100%")) {
+            g_userUiScale = 1.0f;
+            s_stagedScale = 1.0f;
+            SaveUiScale(1.0f);
+        }
+        ImGui::SameLine();
+        if (ImGui::SmallButton("125%")) {
+            g_userUiScale = 1.25f;
+            s_stagedScale = 1.25f;
+            SaveUiScale(1.25f);
+        }
+        ImGui::SameLine();
+        if (ImGui::SmallButton("150%")) {
+            g_userUiScale = 1.50f;
+            s_stagedScale = 1.50f;
+            SaveUiScale(1.50f);
+        }
+
         ImGui::Spacing();
-        
         ImGui::TextDisabled("Controls are paused while F10 is open. Press F10 to return to the game.");
     }
     ImGui::End();
