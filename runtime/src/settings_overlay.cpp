@@ -30,6 +30,8 @@
 #include <string_view>
 #include <utility>
 
+#include <fstream>
+
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
@@ -70,6 +72,39 @@ const char* GraphicsApiDisplayName() {
 }
 
 bool g_topBarVisible = false;
+
+// --- Gestione e salvataggio della scala UI ---
+static void SaveUiScale(float scale) {
+    try {
+        std::ofstream file("ui_scale.cfg");
+        if (file.is_open()) {
+            file << scale;
+        }
+    } catch (...) {}
+}
+
+static float LoadSavedUiScale() {
+    try {
+        std::ifstream file("ui_scale.cfg");
+        float val = 1.0f;
+        if (file.is_open() && (file >> val)) {
+            return std::clamp(val, 0.70f, 2.50f);
+        }
+    } catch (...) {}
+    return 1.0f;
+}
+
+static float g_userUiScale = LoadSavedUiScale();
+static bool g_showKeyboardGuide = true;
+
+float GetUiScale() {
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    if (!viewport || viewport->Size.y <= 0.0f) return 1.0f;
+    float autoBase = std::clamp(viewport->Size.y / 1080.0f, 0.75f, 2.4f);
+    return std::clamp(autoBase * g_userUiScale, 0.65f, 3.0f);
+}
+// ----------------------------------------------
+
 bool g_rumbleEnabled = RuntimeConfigFile::RumbleEnabled(true);
 int g_controllerPort = 0;
 float g_resolutionScale = RuntimeConfigFile::ResolutionMultiplier(1.0f);
@@ -222,7 +257,6 @@ std::string NativeBindingConfig(uint32_t binding) {
     if (PADIsAxisButton(binding)) value += '@' + std::to_string(PADAxisButtonThreshold(binding));
     return value;
 }
-
 
 void SetTopBarVisible(bool visible) {
     if (g_topBarVisible == visible) {
@@ -518,6 +552,7 @@ void DrawRebindPrompt() {
         ImGui::TextUnformatted(g_rebind.kind == RebindKind::Controller
             ? "Press a controller button, pull a trigger, or move a stick."
             : "Press a keyboard key or click a mouse button.");
+
         ImGui::TextUnformatted("Release any held input first. Backspace or Delete clears the mapping.");
         ImGui::TextUnformatted("Escape can be bound. F10 is reserved for settings.");
         const float remaining = std::chrono::duration<float>(g_rebind.deadline - Clock::now()).count();
@@ -531,6 +566,7 @@ void DrawRebindPrompt() {
             CompleteRebind(g_rebind.kind == RebindKind::Controller ? PAD_NATIVE_BUTTON_DISABLED
                                                                   : static_cast<uint32_t>(PAD_KEY_INVALID));
         } else if (g_rebind.active && SDL_GetKeyboardFocus() != nullptr && g_rebind.kind != RebindKind::Controller) {
+
             int count = 0;
             const bool* keys = SDL_GetKeyboardState(&count);
             for (int i = 1; i < std::min(count, static_cast<int>(SDL_SCANCODE_COUNT)) && g_rebind.active; ++i) {
@@ -539,9 +575,11 @@ void DrawRebindPrompt() {
             }
             const uint32_t mouse = SDL_GetMouseState(nullptr, nullptr);
             for (int i = 1; i <= 5 && g_rebind.active; ++i)
+
                 if (!overControl && (mouse & ~g_rebind.mouse & (1u << (i - 1))) != 0) CompleteRebind(static_cast<uint32_t>(-i - 1));
             g_rebind.mouse = mouse;
         } else if (g_rebind.active && SDL_GetKeyboardFocus() != nullptr && g_rebind.kind == RebindKind::Controller) {
+
             auto* pad = SDL_GetGamepadFromID(g_rebind.instance);
             if (pad != nullptr) {
                 for (int i = 0; i < SDL_GAMEPAD_BUTTON_COUNT && g_rebind.active; ++i) {
@@ -1074,7 +1112,14 @@ void DrawGraphicsSettings() {
     if (ImGui::Checkbox("Show FPS", &g_showFps)) {
         RuntimeConfigFile::SetShowFps(g_showFps);
     }
+
     ImGui::Separator();
+    
+    ImGui::SetNextItemWidth(200.0f);
+    if (ImGui::SliderFloat("UI Scale", &g_userUiScale, 0.75f, 2.00f, "%.2fx")) {
+        SaveUiScale(g_userUiScale);
+    }
+    
     ImGui::Text("Graphics API: %s", GraphicsApiDisplayName());
 }
 
@@ -1175,30 +1220,258 @@ void DrawStartupScreen() {
     ImGui::PopStyleColor();
 }
 
+void DrawKeyboardVisualGuide() {
+    if (!g_showKeyboardGuide) return;
+
+    const float scale = GetUiScale();
+    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+
+    // Centra sempre la finestra al centro esatto della visuale
+    ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x + viewport->Size.x * 0.5f,
+                                 viewport->Pos.y + viewport->Size.y * 0.5f),
+                            ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize;
+
+    // Palette colori
+    const ImVec4 colGreen  = ImVec4(0.18f, 0.65f, 0.30f, 0.95f); // Accelerate
+    const ImVec4 colRed    = ImVec4(0.78f, 0.22f, 0.22f, 0.95f); // Brake / Reverse
+    const ImVec4 colBlue   = ImVec4(0.20f, 0.48f, 0.82f, 0.95f); // Steering
+    const ImVec4 colPurple = ImVec4(0.55f, 0.28f, 0.80f, 0.95f); // Drift
+    const ImVec4 colOrange = ImVec4(0.88f, 0.52f, 0.12f, 0.95f); // Item
+    const ImVec4 colCyan   = ImVec4(0.15f, 0.60f, 0.68f, 0.90f); // D-Pad / Look Behind
+    const ImVec4 colGray   = ImVec4(0.38f, 0.40f, 0.44f, 0.90f); // Pause
+
+    uint32_t btnCount = 0;
+    auto* buttons = PADGetKeyButtonBindings(static_cast<uint32_t>(g_controllerPort), &btnCount);
+    uint32_t axisCount = 0;
+    auto* axes = PADGetKeyAxisBindings(static_cast<uint32_t>(g_controllerPort), &axisCount);
+
+    auto GetButtonKey = [&](uint16_t padBtn) -> const char* {
+        if (buttons) {
+            for (uint32_t i = 0; i < btnCount; ++i) {
+                if (buttons[i].padButton == padBtn) return KeyBindingName(buttons[i].scancode);
+            }
+        }
+        return "Unmapped";
+    };
+
+    auto GetAxisKey = [&](uint16_t padAxis) -> const char* {
+        if (axes) {
+            for (uint32_t i = 0; i < axisCount; ++i) {
+                if (axes[i].padAxis == padAxis) return KeyBindingName(axes[i].scancode);
+            }
+        }
+        return "Unmapped";
+    };
+
+    auto DrawKeyBox = [&](const char* currentKey, const char* label, RebindKind kind, uint16_t target, ImVec4 bg, ImVec2 size) {
+        ImGui::PushStyleColor(ImGuiCol_Button, bg);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(std::min(1.0f, bg.x * 1.25f), std::min(1.0f, bg.y * 1.25f), std::min(1.0f, bg.z * 1.25f), 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(bg.x * 0.8f, bg.y * 0.8f, bg.z * 0.8f, 1.0f));
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.0f * scale);
+
+        std::string btnText = std::string(currentKey) + "\n" + label + "##btn_" + std::to_string(target);
+        if (ImGui::Button(btnText.c_str(), size)) {
+            uint32_t count = 0;
+            if (PADGetKeyButtonBindings(static_cast<uint32_t>(g_controllerPort), &count) == nullptr) {
+                PADSetKeyboardActive(static_cast<uint32_t>(g_controllerPort), true);
+                PADSerializeMappings();
+            }
+            BeginRebind(kind, target, label);
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Click to rebind: %s", label);
+        }
+
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor(3);
+    };
+
+    if (ImGui::Begin("Keyboard Controls Setup", &g_showKeyboardGuide, flags)) {
+        // Scala la dimensione del testo della finestra
+        ImGui::SetWindowFontScale(scale);
+
+        ImGui::TextDisabled("Click on any key to rebind its control in real-time.");
+        ImGui::Spacing();
+
+        // -------------------------------------------------------------
+        // GROUP 1: DRIVING (WASD + Space)
+        // -------------------------------------------------------------
+        ImGui::BeginGroup();
+        ImGui::SeparatorText("DRIVING");
+        ImGui::Spacing();
+
+        const float driveKeyW = 82.0f * scale;
+        const float driveKeyH = 50.0f * scale;
+        const float indentW   = driveKeyW + ImGui::GetStyle().ItemSpacing.x;
+
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + indentW);
+        DrawKeyBox(GetButtonKey(PAD_BUTTON_A), "Accelerate", RebindKind::KeyboardButton, PAD_BUTTON_A, colGreen, ImVec2(driveKeyW, driveKeyH));
+
+        DrawKeyBox(GetAxisKey(PAD_AXIS_LEFT_X_NEG), "Steer Left", RebindKind::KeyboardAxis, PAD_AXIS_LEFT_X_NEG, colBlue, ImVec2(driveKeyW, driveKeyH));
+        ImGui::SameLine();
+        DrawKeyBox(GetButtonKey(PAD_BUTTON_B), "Brake / Rev", RebindKind::KeyboardButton, PAD_BUTTON_B, colRed, ImVec2(driveKeyW, driveKeyH));
+        ImGui::SameLine();
+        DrawKeyBox(GetAxisKey(PAD_AXIS_LEFT_X_POS), "Steer Right", RebindKind::KeyboardAxis, PAD_AXIS_LEFT_X_POS, colBlue, ImVec2(driveKeyW, driveKeyH));
+
+        ImGui::Spacing();
+
+        const float spaceW = (driveKeyW * 3.0f) + (ImGui::GetStyle().ItemSpacing.x * 2.0f);
+        DrawKeyBox(GetButtonKey(PAD_TRIGGER_R), "Drift / Hop", RebindKind::KeyboardButton, PAD_TRIGGER_R, colPurple, ImVec2(spaceW, 46.0f * scale));
+
+        ImGui::EndGroup();
+
+        // -------------------------------------------------------------
+        // GROUP 2: ACTIONS & PAUSE
+        // -------------------------------------------------------------
+        ImGui::SameLine(0, 35.0f * scale);
+        ImGui::BeginGroup();
+        ImGui::SeparatorText("ACTIONS & PAUSE");
+        ImGui::Spacing();
+
+        const float actW = 125.0f * scale;
+        const float actH = 46.0f * scale;
+
+        DrawKeyBox(GetButtonKey(PAD_TRIGGER_L), "Use Item", RebindKind::KeyboardButton, PAD_TRIGGER_L, colOrange, ImVec2(actW, actH));
+        ImGui::Spacing();
+        DrawKeyBox(GetButtonKey(PAD_BUTTON_X), "Look Behind", RebindKind::KeyboardButton, PAD_BUTTON_X, colCyan, ImVec2(actW, actH));
+        ImGui::Spacing();
+        DrawKeyBox(GetButtonKey(PAD_BUTTON_START), "Pause", RebindKind::KeyboardButton, PAD_BUTTON_START, colGray, ImVec2(actW, actH));
+
+        ImGui::EndGroup();
+
+        // -------------------------------------------------------------
+        // GROUP 3: TRICKS & D-PAD
+        // -------------------------------------------------------------
+        ImGui::SameLine(0, 35.0f * scale);
+        ImGui::BeginGroup();
+        ImGui::SeparatorText("TRICKS / D-PAD");
+        ImGui::Spacing();
+
+        const float dpadW = 68.0f * scale;
+        const float dpadH = 50.0f * scale;
+        const float indentDpad = dpadW + ImGui::GetStyle().ItemSpacing.x;
+
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + indentDpad);
+        DrawKeyBox(GetButtonKey(PAD_BUTTON_UP), "Wheelie / Up", RebindKind::KeyboardButton, PAD_BUTTON_UP, colCyan, ImVec2(dpadW, dpadH));
+
+        DrawKeyBox(GetButtonKey(PAD_BUTTON_LEFT), "Trick L", RebindKind::KeyboardButton, PAD_BUTTON_LEFT, colCyan, ImVec2(dpadW, dpadH));
+        ImGui::SameLine();
+        DrawKeyBox(GetButtonKey(PAD_BUTTON_DOWN), "Trick Down", RebindKind::KeyboardButton, PAD_BUTTON_DOWN, colCyan, ImVec2(dpadW, dpadH));
+        ImGui::SameLine();
+        DrawKeyBox(GetButtonKey(PAD_BUTTON_RIGHT), "Trick R", RebindKind::KeyboardButton, PAD_BUTTON_RIGHT, colCyan, ImVec2(dpadW, dpadH));
+
+        ImGui::EndGroup();
+
+        // -------------------------------------------------------------
+        // FOOTER
+        // -------------------------------------------------------------
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        // Variabile temporanea per evitare che la finestra si muova mentre trascini il mouse
+        static float s_stagedScale = g_userUiScale;
+
+        ImGui::SetNextItemWidth(160.0f * scale);
+        // Lo slider modifica solo il valore temporaneo
+        ImGui::SliderFloat("UI Scale", &s_stagedScale, 0.75f, 2.00f, "%.2fx");
+
+        // APPLICA LA SCALA SOLO QUANDO RILASCI IL TASTO DEL MOUSE!
+        if (ImGui::IsItemDeactivatedAfterEdit()) {
+            g_userUiScale = s_stagedScale;
+            SaveUiScale(g_userUiScale);
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Drag to select scale, release mouse click to apply.");
+        }
+
+        // Tasti rapidi a clic singolo (non si buggano mai!)
+        ImGui::SameLine();
+        if (ImGui::SmallButton("Reset")) {
+            g_userUiScale = 1.0f;
+            s_stagedScale = 1.0f;
+            SaveUiScale(1.0f);
+        }
+        ImGui::SameLine();
+        if (ImGui::SmallButton("100%")) {
+            g_userUiScale = 1.0f;
+            s_stagedScale = 1.0f;
+            SaveUiScale(1.0f);
+        }
+        ImGui::SameLine();
+        if (ImGui::SmallButton("125%")) {
+            g_userUiScale = 1.25f;
+            s_stagedScale = 1.25f;
+            SaveUiScale(1.25f);
+        }
+        ImGui::SameLine();
+        if (ImGui::SmallButton("150%")) {
+            g_userUiScale = 1.50f;
+            s_stagedScale = 1.50f;
+            SaveUiScale(1.50f);
+        }
+
+        ImGui::Spacing();
+        ImGui::TextDisabled("Controls are paused while F10 is open. Press F10 to return to the game.");
+    }
+    ImGui::End();
+}
+
 void DrawTopBar() {
     if (!g_topBarVisible) {
         return;
     }
 
+    const float scale = GetUiScale();
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
+
+    // 1. Sfondo scuro (Dimming)
     ImGui::GetBackgroundDrawList()->AddRectFilled(viewport->Pos,
         ImVec2(viewport->Pos.x + viewport->Size.x, viewport->Pos.y + viewport->Size.y),
         IM_COL32(0, 0, 0, 70));
+
+    // 2. Avviso in basso (scalato)
     ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x + viewport->Size.x * 0.5f,
-                                 viewport->Pos.y + viewport->Size.y - 24.0f),
+                                 viewport->Pos.y + viewport->Size.y - (26.0f * scale)),
                             ImGuiCond_Always, ImVec2(0.5f, 1.0f));
     ImGui::SetNextWindowBgAlpha(0.85f);
     if (ImGui::Begin("Settings input hint", nullptr,
                      ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
                      ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoSavedSettings |
                      ImGuiWindowFlags_NoFocusOnAppearing)) {
+        ImGui::SetWindowFontScale(scale);
         ImGui::TextUnformatted("Settings open - game controls disabled. Press F10 to return to the game.");
     }
     ImGui::End();
-    if (!ImGui::BeginMainMenuBar()) return;
+
+    // 3. Disegna la guida tastiera e il modal di rebind
+    DrawKeyboardVisualGuide();
+    DrawRebindPrompt();
+
+    // 4. Barra dei menu principale (scala l'altezza e il padding)
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f * scale, 6.0f * scale));
+    const bool barOpen = ImGui::BeginMainMenuBar();
+    ImGui::PopStyleVar();
+
+    if (!barOpen) return;
+
+    // Scala il testo e i menu della barra superiore
+    ImGui::SetWindowFontScale(scale);
 
     ImGui::TextUnformatted("WiiCompiled");
     ImGui::Separator();
+
+    ImGui::TextDisabled("WiiCompiled v0.2.32 (Keyboard & Mouse Edition)");
+    ImGui::Separator();
+
+    // Pulsante per la guida tasti
+    if (ImGui::MenuItem("Controls Guide", nullptr, g_showKeyboardGuide)) {
+        g_showKeyboardGuide = !g_showKeyboardGuide;
+    }
+    ImGui::Separator();
+
     const auto resolutionIt = std::find_if(kResolutions.begin(), kResolutions.end(), [](const ResolutionItem& item) {
         return std::fabs(item.scale - g_resolutionScale) < 0.001f;
     });
@@ -1225,18 +1498,12 @@ void DrawTopBar() {
 
     if (ImGui::BeginMenu("Controller settings")) {
         DrawControllerSettings();
-        // Nest capture under this menu so opening/closing the modal preserves
-        // the settings popup and its current port and scroll position.
-        DrawRebindPrompt();
         ImGui::EndMenu();
     }
 
     const std::string audioLabel = g_audioMuted
         ? "Audio: Muted"
         : "Audio: " + std::to_string(g_audioVolumePercent) + "%";
-    // Keep the popup ID stable while the Master slider changes the visible
-    // label. Without the ### suffix, ImGui treats every new percentage as a
-    // different menu and closes the popup on the first drag update.
     const std::string audioMenuLabel = audioLabel + "###AudioSettingsMenu";
     if (ImGui::BeginMenu(audioMenuLabel.c_str())) {
         DrawAudioSettings();
@@ -1244,7 +1511,7 @@ void DrawTopBar() {
     }
 
     const float hideWidth = ImGui::CalcTextSize("Hide (F10)").x + ImGui::GetStyle().FramePadding.x * 2.0f;
-    ImGui::SetCursorPosX(std::max(ImGui::GetCursorPosX(), ImGui::GetWindowWidth() - hideWidth - 8.0f));
+    ImGui::SetCursorPosX(std::max(ImGui::GetCursorPosX(), ImGui::GetWindowWidth() - hideWidth - (8.0f * scale)));
     if (ImGui::MenuItem("Hide (F10)")) {
         SetTopBarVisible(false);
     }
@@ -1334,6 +1601,7 @@ void HandleEvents(const AuroraEvent* events) noexcept {
             continue;
         }
         controller_mapping_wizard::HandleSdlEvent(ev->sdl);
+
         if (g_rebind.active && (IsToggleKey(ev->sdl, SDL_SCANCODE_BACKSPACE) ||
                                 IsToggleKey(ev->sdl, SDL_SCANCODE_DELETE))) {
             CompleteRebind(g_rebind.kind == RebindKind::Controller ? PAD_NATIVE_BUTTON_DISABLED
@@ -1367,7 +1635,7 @@ void Draw() noexcept {
     DrawTopBar();
     controller_mapping_wizard::Draw();
     // The wizard captures raw presses; keep them out of the game.
-    const bool inputBlocked = controller_mapping_wizard::IsActive() || g_rebind.active;
+    const bool inputBlocked = controller_mapping_wizard::IsActive() || g_topBarVisible || g_rebind.active;
     PADBlockInput(inputBlocked);
     InputBindings::SetInputBlocked(inputBlocked);
     DrawStartupScreen();
