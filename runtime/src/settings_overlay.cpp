@@ -1425,13 +1425,9 @@ void DrawTopBar() {
 
     const float scale = GetUiScale();
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
-
-    // Darkened background dimming
     ImGui::GetBackgroundDrawList()->AddRectFilled(viewport->Pos,
         ImVec2(viewport->Pos.x + viewport->Size.x, viewport->Pos.y + viewport->Size.y),
         IM_COL32(0, 0, 0, 70));
-
-    // Bottom warning hint
     ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x + viewport->Size.x * 0.5f,
                                  viewport->Pos.y + viewport->Size.y - (26.0f * scale)),
                             ImGuiCond_Always, ImVec2(0.5f, 1.0f));
