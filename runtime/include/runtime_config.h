@@ -631,7 +631,7 @@ inline bool SetResolutionMultiplier(float value) {
 }
 
 inline bool SetUiScale(float value) {
-    value = std::clamp(value, 0.75f, 2.0f);
+    value = std::clamp(value, 0.75f, 2.5f);
     Mutable().uiScale = value;
     std::ostringstream formatted;
     formatted << std::fixed << std::setprecision(2) << value;
