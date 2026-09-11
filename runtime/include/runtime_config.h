@@ -803,7 +803,7 @@ inline float ResolutionMultiplier(float fallback = 1.0f) {
 }
 
 inline float UiScale(float fallback = 1.0f) {
-    return std::clamp(Get().uiScale.value_or(fallback), 0.75f, 2.0f);
+    return std::clamp(Get().uiScale.value_or(fallback), 0.75f, 2.5f);
 }
 
 inline float AudioVolume(float fallback = 1.0f) {
