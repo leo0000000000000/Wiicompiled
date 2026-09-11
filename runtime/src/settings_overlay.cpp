@@ -75,7 +75,13 @@ bool g_topBarVisible = false;
 float g_userUiScale = 1.0f;
 static bool g_showKeyboardGuide = true;
 
-// Compute final UI scale combining window resolution and user multiplier
+/**
+ * @brief Computes the effective UI scaling factor.
+ * 
+ * Combines the automatic viewport-relative base scale with the user multiplier,
+ * clamped within the supported visual range.
+ * @return The effective UI scaling factor.
+ */
 float GetUiScale() {
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
     if (!viewport || viewport->Size.y <= 0.0f) return 1.0f;
@@ -235,6 +241,10 @@ std::string NativeBindingConfig(uint32_t binding) {
     return value;
 }
 
+/**
+ * @brief Updates top bar visibility and ensures the controls guide reopens when the overlay appears.
+ * @param visible True to show the top menu bar, false to hide it.
+ */
 void SetTopBarVisible(bool visible) {
     if (g_topBarVisible == visible) {
         return;
@@ -604,6 +614,8 @@ bool DrawKeyboardSettings(uint32_t port) {
     }
     if (!enabled) return false;
     ImGui::TextDisabled("Replaces the gamepad on this port. F10 opens settings.");
+    // Toggle to reopen or hide the controls guide while in settings
+    ImGui::Checkbox("Show controls guide diagram", &g_showKeyboardGuide);
     if (ImGui::Button("Use WASD + mouse preset") || usePreset) {
         const std::array<int, PAD_BUTTON_COUNT> keys = {
             PAD_KEY_MOUSE_LEFT, SDL_SCANCODE_SPACE, SDL_SCANCODE_E, SDL_SCANCODE_Q,
@@ -1201,7 +1213,12 @@ void DrawStartupScreen() {
     ImGui::PopStyleColor();
 }
 
-// Interactive visual controls diagram window
+/**
+ * @brief Renders the interactive visual keyboard controls setup window.
+ * 
+ * Displays keybindings in logical clusters (Driving, Actions, Tricks/D-Pad)
+ * with click-to-rebind capability and UI scale adjustments.
+ */
 void DrawKeyboardVisualGuide() {
     if (!g_showKeyboardGuide) return;
 
