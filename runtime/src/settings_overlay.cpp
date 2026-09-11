@@ -1512,6 +1512,9 @@ void DrawTopBar() {
     const std::string audioLabel = g_audioMuted
         ? "Audio: Muted"
         : "Audio: " + std::to_string(g_audioVolumePercent) + "%";
+    // Keep the popup ID stable while the Master slider changes the visible
+    // label. Without the ### suffix, ImGui treats every new percentage as a
+    // different menu and closes the popup on the first drag update.
     const std::string audioMenuLabel = audioLabel + "###AudioSettingsMenu";
     if (ImGui::BeginMenu(audioMenuLabel.c_str())) {
         DrawAudioSettings();
