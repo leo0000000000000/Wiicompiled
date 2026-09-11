@@ -399,7 +399,11 @@ inline void AppendOverlayRoots(RuntimeUserConfig& config, const std::string& roo
     }
 }
 
-// Reads every supported setting out of a parsed Config.toml document.
+/// <summary>
+/// Reads every supported setting out of a parsed Config.toml document.
+/// </summary>
+/// <param name="document">The parsed TOML document structure.</param>
+/// <returns>A populated RuntimeUserConfig structure.</returns>
 inline RuntimeUserConfig ParseConfigDocument(const toml::value& document) {
     RuntimeUserConfig config;
 
@@ -623,6 +627,11 @@ inline std::string FormatString(std::string_view value) {
     return toml::format(toml::value(std::string(value)));
 }
 
+/// <summary>
+/// Sets and persists the framebuffer resolution multiplier in the video section of Config.toml.
+/// </summary>
+/// <param name="value">The desired resolution multiplier factor.</param>
+/// <returns><c>true</c> if written successfully; otherwise, <c>false</c>.</returns>
 inline bool SetResolutionMultiplier(float value) {
     Mutable().resolutionMultiplier = value;
     std::ostringstream formatted;
@@ -630,6 +639,11 @@ inline bool SetResolutionMultiplier(float value) {
     return WriteSetting("video", "resolution_multiplier", formatted.str());
 }
 
+/// <summary>
+/// Sets and persists the UI scale multiplier in the video section of Config.toml.
+/// </summary>
+/// <param name="value">The desired UI scale factor, clamped between 0.75 and 2.50.</param>
+/// <returns><c>true</c> if written successfully; otherwise, <c>false</c>.</returns>
 inline bool SetUiScale(float value) {
     value = std::clamp(value, 0.75f, 2.5f);
     Mutable().uiScale = value;
@@ -798,10 +812,20 @@ inline uint32_t WindowHeight(uint32_t fallback) {
     return Get().windowHeight.value_or(fallback);
 }
 
+/// <summary>
+/// Retrieves the configured resolution multiplier from the user configuration.
+/// </summary>
+/// <param name="fallback">The fallback value to return if not configured.</param>
+/// <returns>The resolution multiplier float factor.</returns>
 inline float ResolutionMultiplier(float fallback = 1.0f) {
     return std::max(0.0f, Get().resolutionMultiplier.value_or(fallback));
 }
 
+/// <summary>
+/// Retrieves the configured UI scale multiplier from the user configuration.
+/// </summary>
+/// <param name="fallback">The fallback value to return if not configured.</param>
+/// <returns>The UI scale multiplier, clamped between 0.75 and 2.50.</returns>
 inline float UiScale(float fallback = 1.0f) {
     return std::clamp(Get().uiScale.value_or(fallback), 0.75f, 2.5f);
 }
