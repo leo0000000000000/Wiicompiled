@@ -453,6 +453,9 @@ inline RuntimeUserConfig ParseConfigDocument(const toml::value& document) {
             config.frameInterpolationFps = migrated;
         }
     }
+    if (auto value = FindConfigFloat(document, "video", "ui_scale")) {
+        config.uiScale = std::clamp(*value, 0.75f, 2.0f);
+    }
     config.skipUnreadyPipelines = FindConfigValue<bool>(document, "video", "skip_unready_pipelines");
     config.disableCopyFilter = FindConfigValue<bool>(document, "video", "disable_copy_filter");
     config.showFps = FindConfigValue<bool>(document, "video", "show_fps");
@@ -627,6 +630,14 @@ inline bool SetResolutionMultiplier(float value) {
     return WriteSetting("video", "resolution_multiplier", formatted.str());
 }
 
+inline bool SetUiScale(float value) {
+    value = std::clamp(value, 0.75f, 2.0f);
+    Mutable().uiScale = value;
+    std::ostringstream formatted;
+    formatted << std::fixed << std::setprecision(2) << value;
+    return WriteSetting("video", "ui_scale", formatted.str());
+}
+
 inline bool SetWindowSize(uint32_t width, uint32_t height) {
     if (width == 0 || height == 0) {
         return false;
@@ -789,6 +800,10 @@ inline uint32_t WindowHeight(uint32_t fallback) {
 
 inline float ResolutionMultiplier(float fallback = 1.0f) {
     return std::max(0.0f, Get().resolutionMultiplier.value_or(fallback));
+}
+
+inline float UiScale(float fallback = 1.0f) {
+    return std::clamp(Get().uiScale.value_or(fallback), 0.75f, 2.0f);
 }
 
 inline float AudioVolume(float fallback = 1.0f) {
