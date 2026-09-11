@@ -399,11 +399,7 @@ inline void AppendOverlayRoots(RuntimeUserConfig& config, const std::string& roo
     }
 }
 
-/// <summary>
-/// Reads every supported setting out of a parsed Config.toml document.
-/// </summary>
-/// <param name="document">The parsed TOML document structure.</param>
-/// <returns>A populated RuntimeUserConfig structure.</returns>
+// Reads every supported setting out of a parsed Config.toml document.
 inline RuntimeUserConfig ParseConfigDocument(const toml::value& document) {
     RuntimeUserConfig config;
 
@@ -627,11 +623,6 @@ inline std::string FormatString(std::string_view value) {
     return toml::format(toml::value(std::string(value)));
 }
 
-/// <summary>
-/// Sets and persists the framebuffer resolution multiplier in the video section of Config.toml.
-/// </summary>
-/// <param name="value">The desired resolution multiplier factor.</param>
-/// <returns><c>true</c> if written successfully; otherwise, <c>false</c>.</returns>
 inline bool SetResolutionMultiplier(float value) {
     Mutable().resolutionMultiplier = value;
     std::ostringstream formatted;
@@ -812,11 +803,6 @@ inline uint32_t WindowHeight(uint32_t fallback) {
     return Get().windowHeight.value_or(fallback);
 }
 
-/// <summary>
-/// Retrieves the configured resolution multiplier from the user configuration.
-/// </summary>
-/// <param name="fallback">The fallback value to return if not configured.</param>
-/// <returns>The resolution multiplier float factor.</returns>
 inline float ResolutionMultiplier(float fallback = 1.0f) {
     return std::max(0.0f, Get().resolutionMultiplier.value_or(fallback));
 }
