@@ -454,7 +454,7 @@ inline RuntimeUserConfig ParseConfigDocument(const toml::value& document) {
         }
     }
     if (auto value = FindConfigFloat(document, "video", "ui_scale")) {
-        config.uiScale = std::clamp(*value, 0.75f, 2.0f);
+        config.uiScale = std::clamp(*value, 0.75f, 2.50f);
     }
     config.skipUnreadyPipelines = FindConfigValue<bool>(document, "video", "skip_unready_pipelines");
     config.disableCopyFilter = FindConfigValue<bool>(document, "video", "disable_copy_filter");
