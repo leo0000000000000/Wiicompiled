@@ -54,6 +54,10 @@ void SetMixWorkerEnabled(bool enabled);
 namespace settings_overlay {
 namespace {
 
+/**
+ * @brief Returns a display-friendly name for the active graphics backend.
+ * @return String representation of the backend name.
+ */
 const char* GraphicsApiDisplayName() {
     switch (aurora_get_backend()) {
     case BACKEND_D3D11: return "Direct3D 11";
@@ -75,7 +79,13 @@ bool g_topBarVisible = false;
 float g_userUiScale = 1.0f;
 static bool g_showKeyboardGuide = true;
 
-// Compute final UI scale combining window resolution and user multiplier
+/**
+ * @brief Computes the effective UI scaling factor.
+ * 
+ * Combines the automatic viewport-relative base scale with the user multiplier,
+ * clamped within the supported visual range.
+ * @return The effective UI scaling factor.
+ */
 float GetUiScale() {
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
     if (!viewport || viewport->Size.y <= 0.0f) return 1.0f;
@@ -235,6 +245,10 @@ std::string NativeBindingConfig(uint32_t binding) {
     return value;
 }
 
+/**
+ * @brief Updates top bar visibility and ensures the controls guide reopens when the overlay appears.
+ * @param visible True to show the top menu bar, false to hide it.
+ */
 void SetTopBarVisible(bool visible) {
     if (g_topBarVisible == visible) {
         return;
@@ -396,7 +410,7 @@ void DrawWiiRemoteSettings(uint32_t selectedGamePort) {
             ImGui::TextDisabled("console: its buttons mean what the game says they mean, no mapping applies.");
         }
     }
-    if (kind == WiiRemoteInput::Kind::WiiUPro) {
+    if (kind == WiiUPro) {
         if (SDL_Gamepad* gamepad = SDL_GetGamepadFromPlayerIndex(static_cast<int>(selectedGamePort))) {
             // SDL's Wii driver posts the D-pad as joystick buttons 11-14 (the
             // SDL_GAMEPAD_BUTTON_DPAD_* values) while its default HIDAPI mapping
@@ -430,6 +444,11 @@ void DrawWiiRemoteSettings(uint32_t selectedGamePort) {
     ImGui::EndMenu();
 }
 
+/**
+ * @brief Returns the human-readable name of an input scancode or mouse button.
+ * @param scancode SDL scancode or custom negative mouse button code.
+ * @return String representation of the input name.
+ */
 const char* KeyBindingName(int scancode) {
     switch (scancode) {
     case PAD_KEY_MOUSE_LEFT: return "Mouse left";
@@ -461,6 +480,13 @@ struct RebindState {
     std::array<bool, SDL_GAMEPAD_AXIS_COUNT> axesReady{};
 } g_rebind;
 
+/**
+ * @brief Initiates input rebinding capture for a specific target control.
+ * @param kind Category of rebind (controller, keyboard button, or keyboard axis).
+ * @param target Identifier of the control being rebound.
+ * @param label Display label of the target control.
+ * @param secondary True if capturing a secondary/alternative binding.
+ */
 void BeginRebind(RebindKind kind, uint16_t target, const char* label, bool secondary = false) {
     g_rebind = {};
     g_rebind.active = true;
@@ -487,6 +513,10 @@ void BeginRebind(RebindKind kind, uint16_t target, const char* label, bool secon
     }
 }
 
+/**
+ * @brief Completes the active rebinding capture, committing the new value to configuration.
+ * @param value Scancode, mouse button, or native controller button to map.
+ */
 void CompleteRebind(uint32_t value) {
     const auto& capture = g_rebind;
     if (capture.kind == RebindKind::Controller) {
@@ -519,6 +549,9 @@ void CompleteRebind(uint32_t value) {
     g_rebind.active = false;
 }
 
+/**
+ * @brief Renders the modal prompt for capturing a new controller or keyboard binding.
+ */
 void DrawRebindPrompt() {
     if (g_rebind.openPopup) {
         ImGui::OpenPopup("Rebind input");
@@ -582,6 +615,13 @@ void DrawRebindPrompt() {
     ImGui::EndPopup();
 }
 
+/**
+ * @brief Renders a button displaying the current binding that triggers rebinding when clicked.
+ * @param label Display label for the target button/axis.
+ * @param scancode Current scancode or mouse binding index.
+ * @param kind Kind of rebinding (keyboard button or axis).
+ * @param target Identifier of the control being bound.
+ */
 void DrawKeyBinding(const char* label, int scancode, RebindKind kind, uint16_t target) {
     const std::string caption = std::string(KeyBindingName(scancode)) + "##binding";
     if (ImGui::Button(caption.c_str(), ImVec2(220.0f, 0.0f))) BeginRebind(kind, target, label);
@@ -589,6 +629,11 @@ void DrawKeyBinding(const char* label, int scancode, RebindKind kind, uint16_t t
     ImGui::TextUnformatted(label);
 }
 
+/**
+ * @brief Renders the keyboard and mouse configuration section for a given port.
+ * @param port Zero-based controller port index.
+ * @return True if keyboard input is active on this port, false otherwise.
+ */
 bool DrawKeyboardSettings(uint32_t port) {
     uint32_t count = 0;
     auto* buttons = PADGetKeyButtonBindings(port, &count);
@@ -604,6 +649,8 @@ bool DrawKeyboardSettings(uint32_t port) {
     }
     if (!enabled) return false;
     ImGui::TextDisabled("Replaces the gamepad on this port. F10 opens settings.");
+    // Toggle to reopen or hide the controls guide while in settings
+    ImGui::Checkbox("Show controls guide diagram", &g_showKeyboardGuide);
     if (ImGui::Button("Use WASD + mouse preset") || usePreset) {
         const std::array<int, PAD_BUTTON_COUNT> keys = {
             PAD_KEY_MOUSE_LEFT, SDL_SCANCODE_SPACE, SDL_SCANCODE_E, SDL_SCANCODE_Q,
@@ -1006,6 +1053,9 @@ void DrawAudioSettings() {
     }
 }
 
+/**
+ * @brief Renders the graphics configuration options and UI scale setting.
+ */
 void DrawGraphicsSettings() {
     g_displayMode = static_cast<int>(aurora_get_display_mode());
     struct EffectFlag {
@@ -1201,7 +1251,12 @@ void DrawStartupScreen() {
     ImGui::PopStyleColor();
 }
 
-// Interactive visual controls diagram window
+/**
+ * @brief Renders the interactive visual keyboard controls setup window.
+ * 
+ * Displays keybindings in logical clusters (Driving, Actions, Tricks/D-Pad)
+ * with click-to-rebind capability and UI scale adjustments.
+ */
 void DrawKeyboardVisualGuide() {
     if (!g_showKeyboardGuide) return;
 
@@ -1418,6 +1473,9 @@ void DrawKeyboardVisualGuide() {
     ImGui::End();
 }
 
+/**
+ * @brief Renders the main top bar menu and global settings overlays.
+ */
 void DrawTopBar() {
     if (!g_topBarVisible) {
         return;
@@ -1556,6 +1614,9 @@ void PersistDisplayModeIfChanged() {
 }
 } // namespace
 
+/**
+ * @brief Initializes runtime settings on startup, restoring persisted values.
+ */
 void InitializeRuntimeSettings() noexcept {
     PAD_HLE_SetRumbleEnabled(g_rumbleEnabled);
     InputBindings::Reload();
@@ -1584,6 +1645,10 @@ void InitializeRuntimeSettings() noexcept {
     InputBindings::SetInputBlocked(false);
 }
 
+/**
+ * @brief Processes incoming SDL/Aurora events for overlay and rebinding controls.
+ * @param events Pointer to array of Aurora events.
+ */
 void HandleEvents(const AuroraEvent* events) noexcept {
     if (!events) {
         return;
@@ -1610,6 +1675,9 @@ void HandleEvents(const AuroraEvent* events) noexcept {
     }
 }
 
+/**
+ * @brief Main render loop callback for the overlay, drawing all active UI components.
+ */
 void Draw() noexcept {
     // Wait for the frame worker's DONE phase: it has replayed the previous frame's ImGui draw lists
     // and started the next ImGui frame, so all overlay callers can now safely issue ImGui commands.
@@ -1635,11 +1703,18 @@ void Draw() noexcept {
     DrawStartupScreen();
 }
 
+/**
+ * @brief Checks if the initial startup strap screen is currently active.
+ * @return True if the startup screen should be displayed.
+ */
 bool StartupScreenVisible() noexcept {
     return !g_strapInputAccepted.load(std::memory_order_acquire) ||
            g_presentedFrame < g_startupDismissFrame.load(std::memory_order_relaxed);
 }
 
+/**
+ * @brief Notifies the overlay that user input on the strap screen was accepted.
+ */
 void NotifyStrapInputAccepted() noexcept {
     bool expected = false;
     if (g_strapInputAccepted.compare_exchange_strong(expected, true, std::memory_order_acq_rel)) {
@@ -1648,5 +1723,8 @@ void NotifyStrapInputAccepted() noexcept {
     }
 }
 
+/**
+ * @brief Increments the presented frame counter.
+ */
 void AdvancePresentedFrame() noexcept { ++g_presentedFrame; }
 } // namespace settings_overlay
