@@ -30,7 +30,6 @@
 #include <string_view>
 #include <utility>
 
-#include <fstream>
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
@@ -72,35 +71,15 @@ const char* GraphicsApiDisplayName() {
 
 bool g_topBarVisible = false;
 
-// --- Gestione e salvataggio della scala UI ---
-static void SaveUiScale(float scale) {
-    try {
-        std::ofstream file("ui_scale.cfg");
-        if (file.is_open()) {
-            file << scale;
-        }
-    } catch (...) {}
-}
-
-static float LoadSavedUiScale() {
-    try {
-        std::ifstream file("ui_scale.cfg");
-        float val = 1.0f;
-        if (file.is_open() && (file >> val)) {
-            return std::clamp(val, 0.70f, 2.50f);
-        }
-    } catch (...) {}
-    return 1.0f;
-}
-
-static float g_userUiScale = LoadSavedUiScale();
+// Initialize scaling
+float g_userUiScale = 1.0f;
 static bool g_showKeyboardGuide = true;
 
 float GetUiScale() {
     const ImGuiViewport* viewport = ImGui::GetMainViewport();
     if (!viewport || viewport->Size.y <= 0.0f) return 1.0f;
     float autoBase = std::clamp(viewport->Size.y / 1080.0f, 0.75f, 2.4f);
-    return std::clamp(autoBase * g_userUiScale, 0.65f, 3.0f);
+    return std::clamp(autoBase * g_userUiScale, 0.75f, 2.0f);
 }
 // ----------------------------------------------
 
@@ -1112,7 +1091,7 @@ void DrawGraphicsSettings() {
     
     ImGui::SetNextItemWidth(200.0f);
     if (ImGui::SliderFloat("UI Scale", &g_userUiScale, 0.75f, 2.00f, "%.2fx")) {
-        SaveUiScale(g_userUiScale);
+        RuntimeConfigFile::SetUiScale(g_userUiScale);
     }
     
     ImGui::Text("Graphics API: %s", GraphicsApiDisplayName());
@@ -1368,42 +1347,39 @@ void DrawKeyboardVisualGuide() {
         static float s_stagedScale = g_userUiScale;
 
         ImGui::SetNextItemWidth(160.0f * scale);
-        
         ImGui::SliderFloat("UI Scale", &s_stagedScale, 0.75f, 2.00f, "%.2fx");
 
-        // apply scaling only when the mouse is released to avoid glitching due to feedback loop
         if (ImGui::IsItemDeactivatedAfterEdit()) {
             g_userUiScale = s_stagedScale;
-            SaveUiScale(g_userUiScale);
+            RuntimeConfigFile::SetUiScale(g_userUiScale);
         }
         if (ImGui::IsItemHovered()) {
             ImGui::SetTooltip("Drag to select scale, release mouse click to apply.");
         }
 
-        // Buttons for scaling ui
         ImGui::SameLine();
         if (ImGui::SmallButton("Reset")) {
             g_userUiScale = 1.0f;
             s_stagedScale = 1.0f;
-            SaveUiScale(1.0f);
+            RuntimeConfigFile::SetUiScale(1.0f);
         }
         ImGui::SameLine();
         if (ImGui::SmallButton("100%")) {
             g_userUiScale = 1.0f;
             s_stagedScale = 1.0f;
-            SaveUiScale(1.0f);
+            RuntimeConfigFile::SetUiScale(1.0f);
         }
         ImGui::SameLine();
         if (ImGui::SmallButton("125%")) {
             g_userUiScale = 1.25f;
             s_stagedScale = 1.25f;
-            SaveUiScale(1.25f);
+            RuntimeConfigFile::SetUiScale(1.25f);
         }
         ImGui::SameLine();
         if (ImGui::SmallButton("150%")) {
             g_userUiScale = 1.50f;
             s_stagedScale = 1.50f;
-            SaveUiScale(1.50f);
+            RuntimeConfigFile::SetUiScale(1.50f);
         }
 
         ImGui::Spacing();
@@ -1556,6 +1532,7 @@ void InitializeRuntimeSettings() noexcept {
     InputBindings::Reload();
     controller_mapping_wizard::LoadPersistedMappings();
     ApplyConfiguredMappings();
+    g_userUiScale = std::clamp(RuntimeConfigFile::UiScale(1.0f), 0.75f, 2.0f); //Load scaling value from runtime config file
     AudioBackend::Instance().SetMasterVolume(static_cast<float>(g_audioVolumePercent) / 100.0f);
     AudioBackend::Instance().SetMuted(g_audioMuted);
     MusicAttenuation::SetMusicVolume(static_cast<float>(g_musicVolumePercent) / 100.0f);
