@@ -55,6 +55,7 @@ struct RuntimeUserConfig {
     std::optional<bool> audioMuted;
     std::optional<bool> audioMixWorker;
     std::optional<bool> attenuateMusicWhenMediaPlays;
+    std::optional<float> uiScale;
     // Real Wii Remotes (with or without Nunchuk / Classic Controller) and Wii U Pro
     // Controllers paired over Bluetooth, driven by SDL's HIDAPI Wii driver. The driver
     // is opt-in on SDL's side, so this decides whether the runtime turns it on.
