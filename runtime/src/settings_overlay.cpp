@@ -1504,6 +1504,9 @@ void DrawTopBar() {
 
     if (ImGui::BeginMenu("Controller settings")) {
         DrawControllerSettings();
+        // Nest capture under this menu so opening/closing the modal preserves
+        // the settings popup and its current port and scroll position.
+        DrawRebindPrompt();
         ImGui::EndMenu();
     }
     // Top bar menu separator
