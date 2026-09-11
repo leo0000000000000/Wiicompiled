@@ -240,6 +240,10 @@ void SetTopBarVisible(bool visible) {
         return;
     }
     g_topBarVisible = visible;
+    // Reopen controls guide whenever F10 overlay is opened
+    if (visible) {
+        g_showKeyboardGuide = true;
+    }
 }
 
 void ApplyConfiguredMappings() {
