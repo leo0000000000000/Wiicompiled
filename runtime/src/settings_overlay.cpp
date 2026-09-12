@@ -1504,7 +1504,6 @@ void DrawTopBar() {
 
     if (ImGui::BeginMenu("Controller settings")) {
         DrawControllerSettings();
-
         ImGui::EndMenu();
     }
     // Top bar menu separator
