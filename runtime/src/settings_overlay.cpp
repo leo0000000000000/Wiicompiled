@@ -545,7 +545,6 @@ void DrawRebindPrompt() {
         ImGui::OpenPopup("Rebind input");
         g_rebind.openPopup = false;
     }
-
     if (!ImGui::BeginPopupModal("Rebind input", &g_rebind.active, ImGuiWindowFlags_AlwaysAutoResize)) {
         g_rebind.active = false;
         return;
@@ -1520,7 +1519,6 @@ void DrawTopBar() {
 
     ImGui::TextUnformatted("WiiCompiled");
     ImGui::Separator();
-    
     const auto resolutionIt = std::find_if(kResolutions.begin(), kResolutions.end(), [](const ResolutionItem& item) {
         return std::fabs(item.scale - g_resolutionScale) < 0.001f;
     });
@@ -1565,13 +1563,12 @@ void DrawTopBar() {
     const std::string audioMenuLabel = audioLabel + "###AudioSettingsMenu";
     if (ImGui::BeginMenu(audioMenuLabel.c_str())) {
         DrawAudioSettings();
-        DrawRebindPrompt();
         ImGui::EndMenu();
     }
     // Top bar menu separator
     ImGui::Separator();
 
- const ImGuiStyle& style = ImGui::GetStyle();
+    const ImGuiStyle& style = ImGui::GetStyle();
     const float hideWidth = ImGui::CalcTextSize("Hide (F10)").x + style.FramePadding.x * 2.0f;
     const float exitWidth = ImGui::CalcTextSize("X").x + style.FramePadding.x * 2.0f;
     ImGui::SetCursorPosX(std::max(ImGui::GetCursorPosX(),
